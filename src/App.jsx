@@ -25,7 +25,7 @@ const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento"];
 const LOCAIS = ["Freezer 1","Freezer 2","Freezer Ilha","Geladeira","Congelador"];
 const MOTIVOS= ["consumo","churrasco","descarte","doação","transferência"];
 const USERS  = ["Régis","Luciene","Hugo","Lavínia"];
-const ORIGENS= ["in natura","do sol","temperado"];
+const ORIGENS= ["in natura","do sol","temperado","temperada"];
 
 // ─── PACOTES HELPERS ──────────────────────────────────────────────────────────
 const makePacote = (peso) => ({id:uid(), peso, pesoAtual:peso, status:"disponível"});
@@ -394,6 +394,8 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
   const [showXfer,     setShowXfer]     = useState(false);
   const [transferOk,   setTransferOk]   = useState("");
   const [editingOrigem,setEditingOrigem]= useState(false);
+  const [editingPreco, setEditingPreco] = useState(false);
+  const [precoForm,    setPrecoForm]    = useState({precoPago:"",precoKg:""});
 
   // Count per location for pills
   const countBy = loc => meats.filter(m=>m.local===loc).length;
@@ -404,8 +406,14 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
 
   const detail = meats.find(m=>m.id===selected);
 
-  const openDetail = (id) => { setSelected(id); setShowXfer(false); setTransferOk(""); setEditingOrigem(false); };
-  const closeModal = ()   => { setSelected(null); setShowXfer(false); setTransferOk(""); setEditingOrigem(false); };
+  const openDetail = (id) => {
+    setSelected(id); setShowXfer(false); setTransferOk("");
+    setEditingOrigem(false); setEditingPreco(false);
+  };
+  const closeModal = () => {
+    setSelected(null); setShowXfer(false); setTransferOk("");
+    setEditingOrigem(false); setEditingPreco(false);
+  };
 
   const doTransfer = (novoLocal) => {
     onTransfer(selected, novoLocal);
@@ -590,15 +598,16 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                         </button>
                       </div>
                       {editingOrigem&&(
-                        <div style={{display:"flex",gap:8}}>
+                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {[
-                            {val:"in natura", label:"🌿 In Natura", color:C.success},
-                            {val:"do sol",    label:"☀️ Do Sol",    color:C.warning},
-                            {val:"temperado", label:"🌶️ Temperado", color:"#FF7043"},
+                            {val:"in natura",  label:"🌿 In Natura",  color:C.success},
+                            {val:"do sol",     label:"☀️ Do Sol",     color:C.warning},
+                            {val:"temperado",  label:"🌶️ Temperado",  color:"#FF7043"},
+                            {val:"temperada",  label:"🌶️ Temperada",  color:"#FF7043"},
                           ].map(o=>(
                             <button key={o.val}
                               onClick={()=>{ onUpdate(detail.id,{origem:o.val}); setEditingOrigem(false); }}
-                              style={{flex:1,padding:"9px 4px",borderRadius:8,cursor:"pointer",
+                              style={{flex:"1 1 40%",padding:"9px 4px",borderRadius:8,cursor:"pointer",
                                 fontSize:11,fontWeight:700,
                                 background:detail.origem===o.val?o.color+"22":C.bg,
                                 border:`2px solid ${detail.origem===o.val?o.color:C.border}`,
@@ -609,6 +618,65 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                         </div>
                       )}
                     </div>
+
+                    {/* Preço — editável */}
+                    <div style={{marginTop:8,background:C.light,borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editingPreco?10:0}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:3}}>💰 Preço</div>
+                          {!editingPreco&&(
+                            <div style={{fontWeight:600,fontSize:14,color:C.text}}>
+                              {detail.precoPago ? fmtR(detail.precoPago) : "—"}
+                              {detail.precoKg && <span style={{fontSize:12,color:C.muted}}> · {fmtR(detail.precoKg)}/kg</span>}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={()=>{
+                          setEditingPreco(e=>!e);
+                          if(!editingPreco) setPrecoForm({
+                            precoPago: detail.precoPago||"",
+                            precoKg:   detail.precoKg||"",
+                          });
+                        }}
+                          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
+                            padding:"3px 9px",cursor:"pointer",fontSize:11,color:C.muted}}>
+                          {editingPreco?"✕ Fechar":"✏️ Editar"}
+                        </button>
+                      </div>
+                      {editingPreco&&(
+                        <div>
+                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                            <div>
+                              <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>Preço pago (R$)</div>
+                              <input style={inputBase} type="number" step="0.01"
+                                value={precoForm.precoPago}
+                                onFocus={e=>e.target.select()}
+                                onChange={e=>setPrecoForm(f=>({...f,precoPago:e.target.value}))}
+                                placeholder="Ex: 149.75"/>
+                            </div>
+                            <div>
+                              <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>Preço/kg (R$)</div>
+                              <input style={inputBase} type="number" step="0.01"
+                                value={precoForm.precoKg}
+                                onFocus={e=>e.target.select()}
+                                onChange={e=>setPrecoForm(f=>({...f,precoKg:e.target.value}))}
+                                placeholder="Ex: 59.90"/>
+                            </div>
+                          </div>
+                          <button onClick={()=>{
+                            onUpdate(detail.id,{
+                              precoPago: parseFloat(precoForm.precoPago)||null,
+                              precoKg:   parseFloat(precoForm.precoKg)||null,
+                            });
+                            setEditingPreco(false);
+                          }}
+                            style={{width:"100%",background:C.success+"22",border:`1px solid ${C.success}55`,
+                              borderRadius:8,padding:"10px",cursor:"pointer",color:C.success,
+                              fontSize:13,fontWeight:700}}>
+                            ✅ Salvar preço
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Pacotes individuais com peso de cada um */}
@@ -819,10 +887,11 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
         {/* Origem */}
         <FWrap>
           <FLabel>Origem</FLabel>
-          <div style={{display:"flex",gap:8}}>
-            <OrigBtn val="in natura" label="🌿 In Natura"/>
-            <OrigBtn val="do sol"    label="☀️ Do Sol"/>
-            <OrigBtn val="temperado" label="🌶️ Temperado"/>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <OrigBtn val="in natura"  label="🌿 In Natura"/>
+            <OrigBtn val="do sol"     label="☀️ Do Sol"/>
+            <OrigBtn val="temperado"  label="🌶️ Temperado"/>
+            <OrigBtn val="temperada"  label="🌶️ Temperada"/>
           </div>
         </FWrap>
 
