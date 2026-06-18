@@ -1429,11 +1429,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null); // usuário atual
   const [changingUser,setChangingUser]= useState(false); // mostrar troca de usuário
 
-  const remoteUpdate = useRef(false);
+  const lastSaved = useRef(""); // hash do último dado salvo/recebido
 
   // ── LOAD + SYNC em tempo real (Firebase) ──────────────────────────────────
   useEffect(()=>{
-    // Restaura usuário salvo localmente (é por dispositivo)
     try {
       const savedUser = localStorage.getItem("mfi3_user");
       if(savedUser && USERS.includes(savedUser)) setCurrentUser(savedUser);
@@ -1442,33 +1441,40 @@ export default function App() {
     const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
       const data = snapshot.val();
       if(data) {
-        remoteUpdate.current = true;
+        // Marca o hash dos dados recebidos — evita salvar de volta imediatamente
+        lastSaved.current = JSON.stringify(data);
         setMeats(data.meats    || []);
         setExits(data.exits    || []);
         setCatalog(data.catalog || []);
       }
       setStorageOk(true);
       setLoaded(true);
-    }, ()=>{
+    }, (err)=>{
+      console.error("Firebase read error:", err);
       setStorageOk(false);
       setLoaded(true);
     });
     return ()=>unsubscribe();
   },[]);
 
-  // ── SAVE (só quando mudança foi local, debounce 600ms) ────────────────────
+  // ── SAVE (debounce 800ms, só salva quando dado mudou localmente) ──────────
   useEffect(()=>{
     if(!loaded) return;
-    if(remoteUpdate.current) {
-      remoteUpdate.current = false;
-      return;
-    }
+    const currentHash = JSON.stringify({meats, exits, catalog});
+    // Se o hash é igual ao último recebido/salvo, não precisa salvar
+    if(currentHash === lastSaved.current) return;
+
     setSaveStatus("saving");
     const t = setTimeout(()=>{
+      lastSaved.current = currentHash; // otimista: marca como salvo
       set(dbRef(db, DB_PATH), {meats, exits, catalog})
         .then(()=>setSaveStatus("saved"))
-        .catch(()=>setSaveStatus("error"));
-    }, 600);
+        .catch(err=>{
+          lastSaved.current = ""; // reseta para tentar salvar de novo
+          setSaveStatus("error");
+          console.error("Firebase write error:", err);
+        });
+    }, 800);
     return ()=>clearTimeout(t);
   },[meats, exits, catalog, loaded]);
 
@@ -1655,12 +1661,12 @@ export default function App() {
                        : storageOk===false ? C.warning
                        : saveStatus==="error" ? C.danger
                        : C.muted}}>
-                  {storageOk===null   && "🔄 verificando armazenamento..."}
+                  {storageOk===null   && "🔄 conectando ao Firebase..."}
                   {storageOk===true   && saveStatus==="saving" && "💾 salvando..."}
-                  {storageOk===true   && saveStatus==="saved"  && `✅ salvo automaticamente · ${meats.length} item${meats.length!==1?"s":""}`}
-                  {storageOk===true   && saveStatus==="error"  && "⚠️ erro ao salvar"}
-                  {storageOk===true   && saveStatus==="idle"   && "armazenamento automático ativo"}
-                  {storageOk===false  && "⚠️ armazenamento automático indisponível — use o backup manual"}
+                  {storageOk===true   && saveStatus==="saved"  && `✅ salvo · ${meats.length} item${meats.length!==1?"s":""}`}
+                  {storageOk===true   && saveStatus==="error"  && "⚠️ erro ao salvar — verifique as regras do Firebase"}
+                  {storageOk===true   && saveStatus==="idle"   && "Firebase conectado"}
+                  {storageOk===false  && "⚠️ Firebase offline — verifique as regras do banco"}
                 </div>
               </div>
             </div>
