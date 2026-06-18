@@ -542,7 +542,9 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
   const [editingOrigem,   setEditingOrigem]   = useState(false);
   const [editingPreco,    setEditingPreco]    = useState(false);
   const [editingUtilidade,setEditingUtilidade]= useState(false);
-  const [merging,         setMerging]         = useState(false); // modo mesclar
+  const [editingPacotes,  setEditingPacotes]  = useState(false);
+  const [pacotesForm,     setPacotesForm]     = useState({});
+  const [merging,         setMerging]         = useState(false);
   const [precoForm,       setPrecoForm]       = useState({});
 
   // Count per location for pills
@@ -556,11 +558,13 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
 
   const openDetail = (id) => {
     setSelected(id); setShowXfer(false); setTransferOk("");
-    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false); setMerging(false);
+    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
+    setEditingPacotes(false); setMerging(false);
   };
   const closeModal = () => {
     setSelected(null); setShowXfer(false); setTransferOk("");
-    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false); setMerging(false);
+    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
+    setEditingPacotes(false); setMerging(false);
   };
 
   const doTransfer = (novoLocal) => {
@@ -894,31 +898,67 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
                     </div>
                     {(detail.pacotes?.length>0)&&(
                       <div style={{marginTop:10}}>
-                        <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:6}}>
-                          📦 Peso de cada pacote
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                          <div style={{fontSize:11,color:C.muted,fontWeight:600}}>📦 Peso de cada pacote</div>
+                          <button onClick={()=>{
+                            if(!editingPacotes) {
+                              const pacs = detail.pacotes.filter(p=>p.status!=="consumido");
+                              setPacotesForm(pacs.reduce((obj,p)=>({...obj,[p.id]:p.pesoAtual}),{}));
+                            }
+                            setEditingPacotes(e=>!e);
+                          }}
+                            style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
+                              padding:"3px 9px",cursor:"pointer",fontSize:11,color:C.muted}}>
+                            {editingPacotes?"✕ Fechar":"✏️ Editar pesos"}
+                          </button>
                         </div>
                         {detail.pacotes.map((p,i)=>(
                           <div key={p.id||i} style={{display:"flex",justifyContent:"space-between",
                             alignItems:"center",padding:"7px 10px",borderRadius:8,marginBottom:4,
-                            background:p.status==="consumido"?"transparent":
-                                       p.status==="aberto"?C.warning+"18":C.light,
+                            background:p.status==="consumido"?"transparent":p.status==="aberto"?C.warning+"18":C.light,
                             opacity:p.status==="consumido"?0.4:1}}>
                             <span style={{fontSize:13,fontWeight:600,color:C.text}}>
                               Pacote {i+1}
                               {p.status==="aberto"&&<span style={{color:C.warning,fontSize:11}}> · 🔓 aberto</span>}
                               {p.status==="consumido"&&<span style={{color:C.dim,fontSize:11}}> · consumido</span>}
                             </span>
-                            <div style={{textAlign:"right"}}>
-                              <span style={{fontWeight:800,fontSize:14,
-                                color:p.status==="consumido"?C.dim:p.status==="aberto"?C.warning:C.primary}}>
-                                {fmtKg(p.pesoAtual)}
-                              </span>
-                              {p.pesoAtual!==p.peso&&(
-                                <div style={{fontSize:10,color:C.dim}}>original: {fmtKg(p.peso)}</div>
-                              )}
-                            </div>
+                            {editingPacotes&&p.status!=="consumido" ? (
+                              <input style={{...inputBase,width:90,textAlign:"right",padding:"4px 8px",fontSize:13}}
+                                type="number" step="0.1" min="0"
+                                value={pacotesForm[p.id]??p.pesoAtual}
+                                onFocus={e=>e.target.select()}
+                                onChange={e=>setPacotesForm(f=>({...f,[p.id]:e.target.value}))}/>
+                            ) : (
+                              <div style={{textAlign:"right"}}>
+                                <span style={{fontWeight:800,fontSize:14,
+                                  color:p.status==="consumido"?C.dim:p.status==="aberto"?C.warning:C.primary}}>
+                                  {fmtKg(p.pesoAtual)}
+                                </span>
+                                {p.pesoAtual!==p.peso&&(
+                                  <div style={{fontSize:10,color:C.dim}}>original: {fmtKg(p.peso)}</div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ))}
+                        {editingPacotes&&(
+                          <button onClick={()=>{
+                            const updated = detail.pacotes.map(p=>{
+                              if(p.status==="consumido") return p;
+                              const novo = parseFloat(pacotesForm[p.id]);
+                              if(isNaN(novo)||novo<0) return p;
+                              return {...p,pesoAtual:parseFloat(novo.toFixed(3)),status:novo<=0.001?"consumido":p.status};
+                            });
+                            const newTotal = parseFloat(updated.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0).toFixed(3));
+                            onUpdate(detail.id,{pacotes:updated,pesoTotal:newTotal});
+                            setEditingPacotes(false);
+                          }}
+                            style={{width:"100%",background:C.success+"22",border:`1px solid ${C.success}55`,
+                              borderRadius:8,padding:"10px",cursor:"pointer",color:C.success,
+                              fontSize:13,fontWeight:700,marginTop:4}}>
+                            ✅ Salvar pesos
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -963,43 +1003,6 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
                       </>
                     ) : (
                       <>
-                        {/* Mesclar com outro item */}
-                        {!merging ? (
-                          <button onClick={()=>setMerging(true)}
-                            style={{width:"100%",background:"#1A1A2E",border:`1px solid ${C.dim}`,
-                              borderRadius:12,padding:"12px",cursor:"pointer",color:C.muted,
-                              fontSize:13,fontWeight:700,marginBottom:8,display:"flex",
-                              justifyContent:"center",alignItems:"center",gap:8}}>
-                            🔀 Mesclar com outro item
-                          </button>
-                        ) : (
-                          <div style={{marginBottom:8}}>
-                            <div style={{fontSize:12,color:C.muted,marginBottom:8,fontWeight:600}}>
-                              Escolha o item para mesclar com <strong style={{color:C.text}}>{detail.corte||detail.tipo}</strong>:
-                            </div>
-                            <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:200,overflowY:"auto"}}>
-                              {meats.filter(m=>m.id!==detail.id&&m.pesoTotal>0).map(m=>(
-                                <button key={m.id}
-                                  onClick={()=>{ onMerge(detail.id,m.id); closeModal(); }}
-                                  style={{background:C.light,border:`1px solid ${C.border}`,
-                                    borderRadius:10,padding:"10px 12px",cursor:"pointer",
-                                    display:"flex",justifyContent:"space-between",alignItems:"center",
-                                    textAlign:"left"}}>
-                                  <div>
-                                    <div style={{fontWeight:700,fontSize:13,color:C.text}}>{m.corte||m.tipo}</div>
-                                    <div style={{fontSize:11,color:C.muted}}>{m.tipo} · {m.local} · {m.quantidadePecas||1} pacote{(m.quantidadePecas||1)!==1?"s":""}</div>
-                                  </div>
-                                  <strong style={{color:C.primary,fontSize:13}}>{fmtKg(m.pesoTotal)}</strong>
-                                </button>
-                              ))}
-                            </div>
-                            <button onClick={()=>setMerging(false)}
-                              style={{marginTop:8,background:"none",border:"none",color:C.muted,
-                                cursor:"pointer",fontSize:13,width:"100%",textAlign:"center"}}>
-                              ← Cancelar
-                            </button>
-                          </div>
-                        )}
                         <button onClick={()=>setShowXfer(true)}
                           style={{width:"100%",background:C.info+"22",border:`1px solid ${C.info}55`,
                             borderRadius:12,padding:"14px",cursor:"pointer",color:C.info,
@@ -1199,6 +1202,8 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
             </div>
           </div>
         )}
+
+        {matchingItems.length>0&&!addMode&&(
           <div style={{marginBottom:14}}>
             <div style={{fontSize:12,color:C.info,fontWeight:600,marginBottom:8}}>
               📦 Já existe em estoque — adicionar a um item existente?
