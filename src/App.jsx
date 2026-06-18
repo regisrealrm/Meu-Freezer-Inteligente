@@ -1713,22 +1713,30 @@ export default function App() {
             </div>
           )}
 
-          {/* Tabs */}
-          <div style={{display:"flex",overflowX:"auto",marginTop:8,gap:0}}>
-            {TABS.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)}
-                style={{background:"transparent",border:"none",borderBottom:`3px solid ${tab===t.id?C.primary:"transparent"}`,
-                  color:tab===t.id?C.primary:C.muted,cursor:"pointer",padding:"8px 10px",
-                  fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>
-                {t.e} {t.l}
-              </button>
-            ))}
+          {/* Nav grid 3×2 */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,
+            padding:"10px 0 10px"}}>
+            {TABS.map(t=>{
+              const on = tab===t.id;
+              return (
+                <button key={t.id} onClick={()=>setTab(t.id)}
+                  style={{background:on?C.primary+"22":C.light,
+                    border:`2px solid ${on?C.primary:C.border}`,
+                    borderRadius:12,padding:"10px 4px",cursor:"pointer",
+                    display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                  <span style={{fontSize:22,lineHeight:1}}>{t.e}</span>
+                  <span style={{fontSize:11,fontWeight:700,
+                    color:on?C.primary:C.muted}}>{t.l}</span>
+                  {on&&<div style={{width:18,height:3,borderRadius:2,background:C.primary}}/>}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {/* ── Content ────────────────────────────────────── */}
-      <div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px 60px"}}>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts}/>}
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
