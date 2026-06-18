@@ -768,7 +768,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
             <input list="catalog-cortes" style={inputBase}
               value={form.corte} onChange={handleCorteChange} placeholder="Digite ou selecione..."/>
             <datalist id="catalog-cortes">
-              {catalog.filter(c=>c.tipo===form.tipo).map(c=>(
+              {catalog.map(c=>(
                 <option key={c.key} value={c.nome}/>
               ))}
             </datalist>
