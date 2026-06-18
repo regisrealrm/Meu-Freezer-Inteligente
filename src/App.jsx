@@ -1474,59 +1474,80 @@ export default function App() {
 
   const lastSaved = useRef("");
 
-  // ── LOAD + SYNC (Firebase onValue — leitura em tempo real) ────────────────
+  // ── LOAD: localStorage primeiro (instantâneo), Firebase depois (sync) ─────
   useEffect(()=>{
     try {
       const savedUser = localStorage.getItem("mfi3_user");
       if(savedUser && USERS.includes(savedUser)) setCurrentUser(savedUser);
-    } catch(e){}
 
-    const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
-      const data = snapshot.val();
-      if(data) {
-        const hash = JSON.stringify(data);
-        lastSaved.current = hash;
-        setMeats(data.meats    || []);
-        setExits(data.exits    || []);
-        setCatalog(data.catalog || []);
+      // Carrega localStorage imediatamente
+      const local = localStorage.getItem("mfi_local_data");
+      if(local) {
+        const d = JSON.parse(local);
+        if(d.meats?.length||d.exits?.length||d.catalog?.length) {
+          setMeats(d.meats    || []);
+          setExits(d.exits    || []);
+          setCatalog(d.catalog || []);
+          lastSaved.current = local;
+        }
       }
-      setStorageOk(true);
-      setLoaded(true);
-    }, ()=>{
-      setStorageOk(false);
-      setLoaded(true);
-    });
-    return ()=>unsubscribe();
+    } catch(e){}
+    setLoaded(true);
+    setStorageOk(true);
+
+    // Firebase: sincroniza em background (se disponível)
+    try {
+      const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
+        const data = snapshot.val();
+        if(data) {
+          const hash = JSON.stringify(data);
+          // Só atualiza se Firebase tiver dado mais recente
+          const localRaw = localStorage.getItem("mfi_local_data");
+          if(!localRaw || hash !== lastSaved.current) {
+            lastSaved.current = hash;
+            setMeats(data.meats    || []);
+            setExits(data.exits    || []);
+            setCatalog(data.catalog || []);
+          }
+        }
+      }, ()=>{});
+      return ()=>unsubscribe();
+    } catch(e){}
   },[]);
 
-  // ── SAVE via REST API (fetch direto — mais confiável que SDK set()) ────────
+  // ── SAVE: localStorage (sempre) + Firebase (quando disponível) ────────────
   useEffect(()=>{
     if(!loaded) return;
     const currentHash = JSON.stringify({meats, exits, catalog});
     if(currentHash === lastSaved.current) return;
 
+    lastSaved.current = currentHash;
     setSaveStatus("saving");
+
+    // 1. Salva no localStorage imediatamente (sempre funciona)
+    try {
+      localStorage.setItem("mfi_local_data", currentHash);
+      setSaveStatus("saved");
+    } catch(e){}
+
+    // 2. Tenta sincronizar com Firebase em background (sem travar)
     const t = setTimeout(async ()=>{
       const ctrl    = new AbortController();
-      const timeout = setTimeout(()=>ctrl.abort(), 10000);
+      const timeout = setTimeout(()=>ctrl.abort(), 8000);
       try {
-        lastSaved.current = currentHash;
         const res = await fetch(FIREBASE_REST, {
           method:"PUT",
           headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({meats, exits, catalog}),
+          body: currentHash,
           signal: ctrl.signal,
         });
         clearTimeout(timeout);
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        setSaveStatus("saved");
-      } catch(err){
+        if(!res.ok) console.warn("Firebase sync error:", res.status);
+      } catch(e){
         clearTimeout(timeout);
-        lastSaved.current = ""; // permite tentar novamente
-        setSaveStatus("error");
-        console.error("Save error:", err.message);
+        console.warn("Firebase offline, usando localStorage:", e.message);
       }
-    }, 800);
+    }, 1000);
     return ()=>clearTimeout(t);
   },[meats, exits, catalog, loaded]);
 
@@ -1714,12 +1735,10 @@ export default function App() {
                        : storageOk===false ? C.warning
                        : saveStatus==="error" ? C.danger
                        : C.muted}}>
-                  {storageOk===null   && "🔄 conectando ao Firebase..."}
-                  {storageOk===true   && saveStatus==="saving" && "💾 salvando..."}
-                  {storageOk===true   && saveStatus==="saved"  && `✅ salvo · ${meats.length} item${meats.length!==1?"s":""}`}
-                  {storageOk===true   && saveStatus==="error"  && "⚠️ erro ao salvar — verifique as regras do Firebase"}
-                  {storageOk===true   && saveStatus==="idle"   && "Firebase conectado"}
-                  {storageOk===false  && "⚠️ Firebase offline — verifique as regras do banco"}
+                  {saveStatus==="saving" && "💾 salvando..."}
+                  {saveStatus==="saved"  && `✅ salvo · ${meats.length} item${meats.length!==1?"s":""}`}
+                  {saveStatus==="error"  && "⚠️ erro ao salvar"}
+                  {saveStatus==="idle"   && "Meu Freezer Inteligente"}
                 </div>
               </div>
             </div>
