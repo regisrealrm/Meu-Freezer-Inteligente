@@ -970,9 +970,23 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
     : parseFloat(form.pesoTotal)||0;
 
   // Itens correspondentes no estoque
-  const matchKey = `${form.tipo}:${form.corte.trim().toLowerCase()}`;
-  const matchingItems = form.corte.trim().length>1
-    ? meats.filter(m=>`${m.tipo}:${(m.corte||m.tipo).trim().toLowerCase()}`===matchKey&&m.pesoTotal>0)
+  // — exato (tipo + corte + origem) → auto-merge ao salvar
+  // — parcial (tipo + corte, origem diferente) → mostra sugestão
+  const corteKey   = form.corte.trim().toLowerCase();
+  const exactMatch = corteKey.length>1
+    ? meats.find(m=>
+        m.tipo===(form.tipo) &&
+        (m.corte||m.tipo).trim().toLowerCase()===corteKey &&
+        (m.origem||"")===(form.origem||"") &&
+        m.pesoTotal>0
+      )
+    : null;
+  const matchingItems = !exactMatch && corteKey.length>1
+    ? meats.filter(m=>
+        m.tipo===form.tipo &&
+        (m.corte||m.tipo).trim().toLowerCase()===corteKey &&
+        m.pesoTotal>0
+      )
     : [];
 
   const selectedForAdd = meats.find(m=>m.id===addMode);
@@ -986,6 +1000,16 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
     const pacotesPesos = qtd>1
       ? pesosInd.map(p=>parseFloat(p))
       : [parseFloat(form.pesoTotal)];
+    const totalPeso = pacotesPesos.reduce((s,p)=>s+p,0);
+
+    // Auto-merge: tipo + corte + origem iguais → vira mais pacote(s)
+    if(exactMatch) {
+      onAddToExisting(exactMatch.id, totalPeso, qtd, parseFloat(form.precoPago)||null, pacotesPesos);
+      setForm(blank); setAddMode(null); setPesosInd([""]);
+      setOk(true); setTimeout(()=>setOk(false),3000);
+      return;
+    }
+
     onAdd({...form,
       pesoTotal: pacotesPesos[0],
       pacotesPesos,
@@ -1068,8 +1092,18 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
           </div>
         </FWrap>
 
-        {/* Itens correspondentes */}
-        {matchingItems.length>0&&!addMode&&(
+        {/* Aviso de auto-merge quando tipo+corte+origem já existem */}
+        {exactMatch&&!addMode&&(
+          <div style={{background:"#0B2A1E",border:`1px solid ${C.success}55`,borderRadius:8,
+            padding:"10px 12px",marginBottom:12}}>
+            <div style={{fontSize:12,color:C.success,fontWeight:700,marginBottom:2}}>
+              ✅ Será adicionado como pacote ao estoque existente
+            </div>
+            <div style={{fontSize:11,color:C.muted}}>
+              {exactMatch.corte||exactMatch.tipo} · {exactMatch.local} · {fmtKg(exactMatch.pesoTotal)} já em estoque
+            </div>
+          </div>
+        )}
           <div style={{marginBottom:14}}>
             <div style={{fontSize:12,color:C.info,fontWeight:600,marginBottom:8}}>
               📦 Já existe em estoque — adicionar a um item existente?
@@ -1849,14 +1883,18 @@ export default function App() {
     setCatalog(p=>p.some(c=>c.key===key)?p:[...p,{id:uid(),nome,tipo:meat.tipo,key}]);
   };
 
-  const addToExisting = (id, pesoAdd, qtdAdd, precoAdd) => {
+  const addToExisting = (id, pesoAdd, qtdAdd, precoAdd, pacotesPesos) => {
     const n = qtdAdd||1;
-    const pesoPorPacote = parseFloat((pesoAdd/n).toFixed(3));
-    const newPacotes = Array(n).fill(0).map(()=>makePacote(pesoPorPacote));
+    // Usa pesos individuais se fornecidos, senão distribui igualmente
+    const pesos = pacotesPesos?.length
+      ? pacotesPesos
+      : Array(n).fill(parseFloat((pesoAdd/n).toFixed(3)));
+    const newPacotes = pesos.map(p=>makePacote(parseFloat(p)||0));
+    const totalAdd   = pesos.reduce((s,p)=>s+(parseFloat(p)||0),0);
     setMeats(p=>p.map(m=>m.id===id?{
       ...m,
-      pesoTotal:    parseFloat((getPesoTotal(m)+pesoAdd).toFixed(3)),
-      pesoInicial:  parseFloat(((m.pesoInicial||m.pesoTotal)+pesoAdd).toFixed(3)),
+      pesoTotal:    parseFloat((getPesoTotal(m)+totalAdd).toFixed(3)),
+      pesoInicial:  parseFloat(((m.pesoInicial||m.pesoTotal)+totalAdd).toFixed(3)),
       quantidadePecas:(m.quantidadePecas||1)+n,
       pacotes:[...(m.pacotes||[makePacote(m.pesoTotal)]),...newPacotes],
       precoPago:precoAdd?parseFloat(((m.precoPago||0)+precoAdd).toFixed(2)):m.precoPago,
