@@ -182,10 +182,12 @@ function Dashboard({meats,exits,alerts}) {
   const kgByLocal    = l => meats.filter(m=>m.local===l).reduce((s,m)=>s+m.pesoTotal,0);
 
   // Origem breakdown
-  const natItems = meats.filter(m=>m.origem==="in natura");
-  const solItems = meats.filter(m=>m.origem==="do sol");
-  const kgNat    = natItems.reduce((s,m)=>s+m.pesoTotal,0);
-  const kgSol    = solItems.reduce((s,m)=>s+m.pesoTotal,0);
+  const natItems  = meats.filter(m=>m.origem==="in natura");
+  const solItems  = meats.filter(m=>m.origem==="do sol");
+  const tempItems = meats.filter(m=>m.origem==="temperada");
+  const kgNat     = natItems.reduce((s,m)=>s+m.pesoTotal,0);
+  const kgSol     = solItems.reduce((s,m)=>s+m.pesoTotal,0);
+  const kgTemp    = tempItems.reduce((s,m)=>s+m.pesoTotal,0);
 
   const boxes = [
     {id:"estoque", icon:"🧊", label:"Total de estoque", value:fmtKg(totalKg),          color:C.primary},
@@ -218,21 +220,33 @@ function Dashboard({meats,exits,alerts}) {
         })}
       </div>
 
-      {/* ── Natural / Do Sol ─────────────────────────── */}
-      {(kgNat>0||kgSol>0)&&(
-        <div style={{display:"flex",gap:10,marginBottom:12}}>
-          <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,
-            borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.success}`}}>
-            <div style={{fontSize:11,color:C.success,fontWeight:700,marginBottom:4}}>🌿 In Natura</div>
-            <div style={{fontSize:20,fontWeight:800,color:C.success}}>{fmtKg(kgNat)}</div>
-            <div style={{fontSize:11,color:C.muted}}>{natItems.length} item{natItems.length!==1?"s":""}</div>
-          </div>
-          <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,
-            borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.warning}`}}>
-            <div style={{fontSize:11,color:C.warning,fontWeight:700,marginBottom:4}}>☀️ Do Sol</div>
-            <div style={{fontSize:20,fontWeight:800,color:C.warning}}>{fmtKg(kgSol)}</div>
-            <div style={{fontSize:11,color:C.muted}}>{solItems.length} item{solItems.length!==1?"s":""}</div>
-          </div>
+      {/* ── In Natura / Do Sol / Temperada ──────────────── */}
+      {(kgNat>0||kgSol>0||kgTemp>0)&&(
+        <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+          {kgNat>0&&(
+            <div style={{flex:"1 1 80px",background:C.card,border:`1px solid ${C.border}`,
+              borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.success}`}}>
+              <div style={{fontSize:11,color:C.success,fontWeight:700,marginBottom:4}}>🌿 In Natura</div>
+              <div style={{fontSize:18,fontWeight:800,color:C.success}}>{fmtKg(kgNat)}</div>
+              <div style={{fontSize:11,color:C.muted}}>{natItems.length} item{natItems.length!==1?"s":""}</div>
+            </div>
+          )}
+          {kgSol>0&&(
+            <div style={{flex:"1 1 80px",background:C.card,border:`1px solid ${C.border}`,
+              borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.warning}`}}>
+              <div style={{fontSize:11,color:C.warning,fontWeight:700,marginBottom:4}}>☀️ Do Sol</div>
+              <div style={{fontSize:18,fontWeight:800,color:C.warning}}>{fmtKg(kgSol)}</div>
+              <div style={{fontSize:11,color:C.muted}}>{solItems.length} item{solItems.length!==1?"s":""}</div>
+            </div>
+          )}
+          {kgTemp>0&&(
+            <div style={{flex:"1 1 80px",background:C.card,border:`1px solid ${C.border}`,
+              borderRadius:12,padding:"12px 14px",borderLeft:"4px solid #FF7043"}}>
+              <div style={{fontSize:11,color:"#FF7043",fontWeight:700,marginBottom:4}}>🌶️ Temperada</div>
+              <div style={{fontSize:18,fontWeight:800,color:"#FF7043"}}>{fmtKg(kgTemp)}</div>
+              <div style={{fontSize:11,color:C.muted}}>{tempItems.length} item{tempItems.length!==1?"s":""}</div>
+            </div>
+          )}
         </div>
       )}
 
@@ -395,7 +409,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
   const [transferOk,   setTransferOk]   = useState("");
   const [editingOrigem,setEditingOrigem]= useState(false);
   const [editingPreco, setEditingPreco] = useState(false);
-  const [precoForm,    setPrecoForm]    = useState({precoPago:"",precoKg:""});
+  const [precoForm,    setPrecoForm]    = useState({}); // { [pacoteId]: "price" }
 
   // Count per location for pills
   const countBy = loc => meats.filter(m=>m.local===loc).length;
@@ -618,7 +632,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                       )}
                     </div>
 
-                    {/* Preço — editável */}
+                    {/* Preço — editável por pacote */}
                     <div style={{marginTop:8,background:C.light,borderRadius:8,padding:"10px 12px"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editingPreco?10:0}}>
                         <div>
@@ -631,51 +645,81 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                           )}
                         </div>
                         <button onClick={()=>{
+                          if(!editingPreco) {
+                            const pacs = (detail.pacotes||[]).filter(p=>p.status!=="consumido");
+                            const porPac = pacs.length && detail.precoPago
+                              ? parseFloat((detail.precoPago/pacs.length).toFixed(2)) : "";
+                            if(pacs.length>0) {
+                              setPrecoForm(pacs.reduce((obj,p)=>({...obj,[p.id]:porPac}),{}));
+                            } else {
+                              setPrecoForm({__single__: detail.precoPago||""});
+                            }
+                          }
                           setEditingPreco(e=>!e);
-                          if(!editingPreco) setPrecoForm({
-                            precoPago: detail.precoPago||"",
-                            precoKg:   detail.precoKg||"",
-                          });
                         }}
                           style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
                             padding:"3px 9px",cursor:"pointer",fontSize:11,color:C.muted}}>
                           {editingPreco?"✕ Fechar":"✏️ Editar"}
                         </button>
                       </div>
-                      {editingPreco&&(
-                        <div>
-                          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                            <div>
-                              <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>Preço pago (R$)</div>
-                              <input style={inputBase} type="number" step="0.01"
-                                value={precoForm.precoPago}
-                                onFocus={e=>e.target.select()}
-                                onChange={e=>setPrecoForm(f=>({...f,precoPago:e.target.value}))}
-                                placeholder="Ex: 149.75"/>
-                            </div>
-                            <div>
-                              <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>Preço/kg (R$)</div>
-                              <input style={inputBase} type="number" step="0.01"
-                                value={precoForm.precoKg}
-                                onFocus={e=>e.target.select()}
-                                onChange={e=>setPrecoForm(f=>({...f,precoKg:e.target.value}))}
-                                placeholder="Ex: 59.90"/>
-                            </div>
+                      {editingPreco&&(()=>{
+                        const pacs = (detail.pacotes||[]).filter(p=>p.status!=="consumido");
+                        const isSingle = pacs.length===0 || "__single__" in precoForm;
+                        const totalPreco = isSingle
+                          ? parseFloat(precoForm.__single__)||0
+                          : pacs.reduce((s,p)=>s+(parseFloat(precoForm[p.id])||0),0);
+                        const totalPeso = isSingle
+                          ? detail.pesoTotal
+                          : pacs.reduce((s,p)=>s+p.pesoAtual,0);
+                        return (
+                          <div>
+                            {isSingle ? (
+                              <div style={{marginBottom:8}}>
+                                <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:4}}>Preço total (R$)</div>
+                                <input style={inputBase} type="number" step="0.01"
+                                  value={precoForm.__single__}
+                                  onFocus={e=>e.target.select()}
+                                  onChange={e=>setPrecoForm({__single__:e.target.value})}
+                                  placeholder="Ex: 149.75"/>
+                              </div>
+                            ) : (
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8,marginBottom:8}}>
+                                {pacs.map((p,i)=>(
+                                  <div key={p.id}>
+                                    <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:3}}>
+                                      Pacote {i+1} · {fmtKg(p.pesoAtual)}
+                                    </div>
+                                    <input style={inputBase} type="number" step="0.01"
+                                      value={precoForm[p.id]||""}
+                                      onFocus={e=>e.target.select()}
+                                      onChange={e=>setPrecoForm(f=>({...f,[p.id]:e.target.value}))}
+                                      placeholder="R$"/>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {totalPreco>0&&(
+                              <div style={{fontSize:11,color:C.muted,marginBottom:8}}>
+                                Total: <strong style={{color:C.primary}}>{fmtR(totalPreco)}</strong>
+                                {totalPeso>0&&<span> · {fmtR(parseFloat((totalPreco/totalPeso).toFixed(2)))}/kg</span>}
+                              </div>
+                            )}
+                            <button onClick={()=>{
+                              const precoKgCalc = totalPeso>0 ? parseFloat((totalPreco/totalPeso).toFixed(2)) : null;
+                              onUpdate(detail.id,{
+                                precoPago: totalPreco||null,
+                                precoKg:   precoKgCalc,
+                              });
+                              setEditingPreco(false);
+                            }}
+                              style={{width:"100%",background:C.success+"22",border:`1px solid ${C.success}55`,
+                                borderRadius:8,padding:"10px",cursor:"pointer",color:C.success,
+                                fontSize:13,fontWeight:700}}>
+                              ✅ Salvar preço
+                            </button>
                           </div>
-                          <button onClick={()=>{
-                            onUpdate(detail.id,{
-                              precoPago: parseFloat(precoForm.precoPago)||null,
-                              precoKg:   parseFloat(precoForm.precoKg)||null,
-                            });
-                            setEditingPreco(false);
-                          }}
-                            style={{width:"100%",background:C.success+"22",border:`1px solid ${C.success}55`,
-                              borderRadius:8,padding:"10px",cursor:"pointer",color:C.success,
-                              fontSize:13,fontWeight:700}}>
-                            ✅ Salvar preço
-                          </button>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
 
                     {/* Pacotes individuais com peso de cada um */}
