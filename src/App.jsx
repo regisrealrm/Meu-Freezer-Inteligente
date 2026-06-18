@@ -169,15 +169,15 @@ const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({meats,exits,alerts}) {
-  const [open,    setOpen]    = useState(null);
-  const [localFlt,setLocalFlt]= useState("todos"); // sub-filter inside "estoque" panel
+  const [open,     setOpen]     = useState(null);
+  const [localFlt, setLocalFlt] = useState("todos");
+  const [openUtil, setOpenUtil] = useState(null); // "churrasco" | "consumo" | null
   const toggle = k => { setOpen(p=>p===k?null:k); setLocalFlt("todos"); };
 
   const totalKg    = meats.reduce((s,m)=>s+m.pesoTotal,0);
   const valorAtual = meats.reduce((s,m)=>s+(m.precoPago||0),0);
   const byTipo     = TIPOS.map(t=>({t,kg:meats.filter(m=>m.tipo===t).reduce((s,m)=>s+m.pesoTotal,0),count:meats.filter(m=>m.tipo===t).length})).filter(x=>x.kg>0);
 
-  // locais that actually have items
   const locaisAtivos = LOCAIS.filter(l=>meats.some(m=>m.local===l));
   const kgByLocal    = l => meats.filter(m=>m.local===l).reduce((s,m)=>s+m.pesoTotal,0);
 
@@ -188,6 +188,12 @@ function Dashboard({meats,exits,alerts}) {
   const kgNat     = natItems.reduce((s,m)=>s+m.pesoTotal,0);
   const kgSol     = solItems.reduce((s,m)=>s+m.pesoTotal,0);
   const kgTemp    = tempItems.reduce((s,m)=>s+m.pesoTotal,0);
+
+  // Utilidade breakdown
+  const churrascoItems = meats.filter(m=>m.utilidade==="churrasco");
+  const consumoItems   = meats.filter(m=>m.utilidade==="consumo");
+  const kgChurrasco    = churrascoItems.reduce((s,m)=>s+m.pesoTotal,0);
+  const kgConsumo      = consumoItems.reduce((s,m)=>s+m.pesoTotal,0);
 
   const boxes = [
     {id:"estoque", icon:"🧊", label:"Total de estoque", value:fmtKg(totalKg),          color:C.primary},
@@ -248,6 +254,77 @@ function Dashboard({meats,exits,alerts}) {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Utilidade: Churrasco / Consumo ───────────────── */}
+      {(kgChurrasco>0||kgConsumo>0)&&(
+        <>
+          <div style={{display:"flex",gap:8,marginBottom:openUtil?8:12}}>
+            {kgChurrasco>0&&(
+              <div onClick={()=>setOpenUtil(u=>u==="churrasco"?null:"churrasco")}
+                style={{flex:1,background:openUtil==="churrasco"?C.primary+"18":C.card,
+                  border:`1px solid ${openUtil==="churrasco"?C.primary:C.border}`,
+                  borderRadius:12,padding:"12px 14px",cursor:"pointer",
+                  borderLeft:`4px solid ${C.primary}`}}>
+                <div style={{fontSize:11,color:C.primary,fontWeight:700}}>🔥 Churrasco</div>
+                <div style={{fontSize:18,fontWeight:800,color:C.primary}}>{fmtKg(kgChurrasco)}</div>
+                <div style={{fontSize:11,color:C.muted}}>{churrascoItems.length} item{churrascoItems.length!==1?"s":""} · {openUtil==="churrasco"?"▲":"▼"}</div>
+              </div>
+            )}
+            {kgConsumo>0&&(
+              <div onClick={()=>setOpenUtil(u=>u==="consumo"?null:"consumo")}
+                style={{flex:1,background:openUtil==="consumo"?C.success+"18":C.card,
+                  border:`1px solid ${openUtil==="consumo"?C.success:C.border}`,
+                  borderRadius:12,padding:"12px 14px",cursor:"pointer",
+                  borderLeft:`4px solid ${C.success}`}}>
+                <div style={{fontSize:11,color:C.success,fontWeight:700}}>🍽️ Consumo</div>
+                <div style={{fontSize:18,fontWeight:800,color:C.success}}>{fmtKg(kgConsumo)}</div>
+                <div style={{fontSize:11,color:C.muted}}>{consumoItems.length} item{consumoItems.length!==1?"s":""} · {openUtil==="consumo"?"▲":"▼"}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Breakdown por tipo quando card clicado */}
+          {openUtil&&(
+            <Card style={{marginBottom:12,borderTop:`3px solid ${openUtil==="churrasco"?C.primary:C.success}`}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>
+                {openUtil==="churrasco"?"🔥 Churrasco por tipo":"🍽️ Consumo por tipo"}
+              </div>
+              {TIPOS.map(t=>{
+                const itens = meats.filter(m=>m.utilidade===openUtil&&m.tipo===t);
+                const kg    = itens.reduce((s,m)=>s+m.pesoTotal,0);
+                if(kg===0) return null;
+                const total = openUtil==="churrasco"?kgChurrasco:kgConsumo;
+                const pct   = total>0?(kg/total)*100:0;
+                const accent= TIPO_COLORS[t]||C.muted;
+                return (
+                  <div key={t} style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <span style={{fontSize:13,fontWeight:600,textTransform:"capitalize",color:C.text}}>{t}</span>
+                      <div style={{textAlign:"right"}}>
+                        <span style={{fontSize:13,fontWeight:800,color:accent}}>{fmtKg(kg)}</span>
+                        <span style={{fontSize:11,color:C.muted}}> · {itens.length} item{itens.length!==1?"s":""}</span>
+                      </div>
+                    </div>
+                    <div style={{background:C.border,borderRadius:4,height:6,overflow:"hidden"}}>
+                      <div style={{width:`${pct}%`,height:"100%",background:accent,transition:"width 0.4s"}}/>
+                    </div>
+                    {/* Lista dos cortes */}
+                    <div style={{marginTop:4,paddingLeft:8}}>
+                      {itens.map(m=>(
+                        <div key={m.id} style={{display:"flex",justifyContent:"space-between",
+                          fontSize:11,color:C.muted,padding:"2px 0"}}>
+                          <span>{m.corte||m.tipo}</span>
+                          <span style={{color:accent,fontWeight:600}}>{fmtKg(m.pesoTotal)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+        </>
       )}
 
       {/* ── Expandable panels ────────────────────────── */}
@@ -407,9 +484,10 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
   const [selected,     setSelected]     = useState(null);
   const [showXfer,     setShowXfer]     = useState(false);
   const [transferOk,   setTransferOk]   = useState("");
-  const [editingOrigem,setEditingOrigem]= useState(false);
-  const [editingPreco, setEditingPreco] = useState(false);
-  const [precoForm,    setPrecoForm]    = useState({}); // { [pacoteId]: "price" }
+  const [editingOrigem,   setEditingOrigem]   = useState(false);
+  const [editingPreco,    setEditingPreco]    = useState(false);
+  const [editingUtilidade,setEditingUtilidade]= useState(false);
+  const [precoForm,       setPrecoForm]       = useState({});
 
   // Count per location for pills
   const countBy = loc => meats.filter(m=>m.local===loc).length;
@@ -422,11 +500,11 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
 
   const openDetail = (id) => {
     setSelected(id); setShowXfer(false); setTransferOk("");
-    setEditingOrigem(false); setEditingPreco(false);
+    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
   };
   const closeModal = () => {
     setSelected(null); setShowXfer(false); setTransferOk("");
-    setEditingOrigem(false); setEditingPreco(false);
+    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
   };
 
   const doTransfer = (novoLocal) => {
@@ -722,7 +800,42 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                       })()}
                     </div>
 
-                    {/* Pacotes individuais com peso de cada um */}
+                    {/* Utilidade — editável */}
+                    <div style={{marginTop:8,background:C.light,borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editingUtilidade?10:0}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:3}}>🎯 Utilidade</div>
+                          {!editingUtilidade&&(
+                            <div style={{fontWeight:600,fontSize:14,color:C.text}}>
+                              {detail.utilidade==="churrasco"?"🔥 Churrasco":detail.utilidade==="consumo"?"🍽️ Consumo":"Não definida"}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={()=>setEditingUtilidade(e=>!e)}
+                          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
+                            padding:"3px 9px",cursor:"pointer",fontSize:11,color:C.muted}}>
+                          {editingUtilidade?"✕ Fechar":"✏️ Editar"}
+                        </button>
+                      </div>
+                      {editingUtilidade&&(
+                        <div style={{display:"flex",gap:8}}>
+                          {[
+                            {val:"churrasco", label:"🔥 Churrasco", color:C.primary},
+                            {val:"consumo",  label:"🍽️ Consumo",  color:C.info},
+                          ].map(u=>(
+                            <button key={u.val}
+                              onClick={()=>{ onUpdate(detail.id,{utilidade:u.val}); setEditingUtilidade(false); }}
+                              style={{flex:1,padding:"10px 4px",borderRadius:8,cursor:"pointer",
+                                fontSize:12,fontWeight:700,
+                                background:detail.utilidade===u.val?u.color+"22":C.bg,
+                                border:`2px solid ${detail.utilidade===u.val?u.color:C.border}`,
+                                color:detail.utilidade===u.val?u.color:C.muted}}>
+                              {u.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {(detail.pacotes?.length>0)&&(
                       <div style={{marginTop:10}}>
                         <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:6}}>
@@ -814,7 +927,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
 
 // ─── ENTRADA ──────────────────────────────────────────────────────────────────
 function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
-  const blank = {tipo:"bovina",corte:"",origem:"",pesoTotal:"",quantidadePecas:"1",
+  const blank = {tipo:"bovina",corte:"",origem:"",utilidade:"",pesoTotal:"",quantidadePecas:"1",
     dataEntrada:TODAY,local:"Freezer 1",status:"disponível",observacao:"",precoPago:"",precoKg:""};
   const [form,     setForm]    = useState(blank);
   const [ok,       setOk]      = useState(false);
@@ -901,6 +1014,16 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
     </button>
   );
 
+  const UtilBtn = ({val,label}) => (
+    <button onClick={()=>setForm(f=>({...f,utilidade:f.utilidade===val?"":val}))}
+      style={{flex:1,padding:"10px 0",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",
+        border:`2px solid ${form.utilidade===val?C.primary:C.border}`,
+        background:form.utilidade===val?C.primary+"22":"#0A1520",
+        color:form.utilidade===val?C.primary:C.muted}}>
+      {label}
+    </button>
+  );
+
   return (
     <div>
       <SecTitle icon="➕" children="Nova Entrada"/>
@@ -934,6 +1057,14 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
             <OrigBtn val="in natura"  label="🌿 In Natura"/>
             <OrigBtn val="do sol"     label="☀️ Do Sol"/>
             <OrigBtn val="temperada"  label="🌶️ Temperada"/>
+          </div>
+        </FWrap>
+
+        <FWrap>
+          <FLabel>Utilidade</FLabel>
+          <div style={{display:"flex",gap:8}}>
+            <UtilBtn val="churrasco" label="🔥 Churrasco"/>
+            <UtilBtn val="consumo"  label="🍽️ Consumo"/>
           </div>
         </FWrap>
 
