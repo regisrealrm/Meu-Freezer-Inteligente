@@ -536,6 +536,7 @@ function Dashboard({meats,exits,alerts}) {
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
 function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
   const [flocal,       setFlocal]       = useState("todos");
+  const [futilidade,   setFutilidade]   = useState("todos");
   const [selected,     setSelected]     = useState(null);
   const [showXfer,     setShowXfer]     = useState(false);
   const [transferOk,   setTransferOk]   = useState("");
@@ -549,10 +550,12 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
   const [precoForm,       setPrecoForm]       = useState({});
 
   // Count per location for pills
-  const countBy = loc => meats.filter(m=>m.local===loc).length;
+  const countBy     = loc  => meats.filter(m=>m.local===loc).length;
+  const countByUtil = util => meats.filter(m=>m.utilidade===util).length;
 
   const filtered = meats
     .filter(m=>flocal==="todos"||m.local===flocal)
+    .filter(m=>futilidade==="todos"||m.utilidade===futilidade)
     .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
 
   const detail = meats.find(m=>m.id===selected);
@@ -601,17 +604,42 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
         action={<Btn small onClick={()=>setTab("entrada")}>+ Nova entrada</Btn>}/>
 
       {/* ── Location pills ───────────────────────────── */}
-      <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:16,paddingBottom:4}}>
-        <LocPill label="Todos" value="todos" count={meats.length}/>
+      <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:8,paddingBottom:4}}>
+        <LocPill label="Todos locais" value="todos" count={meats.length}/>
         {LOCAIS.filter(l=>countBy(l)>0).map(l=>(
           <LocPill key={l} label={l} value={l} count={countBy(l)}/>
+        ))}
+      </div>
+
+      {/* ── Utilidade pills ──────────────────────────── */}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        {[
+          {val:"todos",     label:"Tudo",        color:C.primary},
+          {val:"churrasco", label:"🔥 Churrasco", color:C.primary},
+          {val:"consumo",   label:"🍽️ Consumo",   color:C.success},
+        ].map(u=>(
+          <button key={u.val} onClick={()=>setFutilidade(u.val)}
+            style={{background:futilidade===u.val?u.color+"22":C.card,
+              color:futilidade===u.val?u.color:C.muted,
+              border:`1px solid ${futilidade===u.val?u.color:C.border}`,
+              borderRadius:20,padding:"6px 14px",cursor:"pointer",
+              fontSize:12,fontWeight:600,whiteSpace:"nowrap",flexShrink:0,
+              display:"flex",gap:6,alignItems:"center"}}>
+            {u.label}
+            {u.val!=="todos"&&(
+              <span style={{background:futilidade===u.val?u.color+"33":C.light,
+                borderRadius:10,padding:"1px 6px",fontSize:11,fontWeight:700}}>
+                {countByUtil(u.val)}
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
       {/* ── Meat list ───────────────────────────────── */}
       {filtered.length===0&&(
         <Card><div style={{color:C.muted,textAlign:"center",padding:20}}>
-          Nenhum item em {flocal==="todos"?"estoque":flocal}.
+          Nenhum item encontrado com os filtros selecionados.
         </div></Card>
       )}
 
@@ -1358,9 +1386,15 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
 
 // ─── SAÍDA ────────────────────────────────────────────────────────────────────
 function Saida({meats,onRegister,setTab}) {
-  const avail = [...meats].filter(m=>m.pesoTotal>0).sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
-  const [sel,      setSel]      = useState(avail[0]?.id||"");
-  const [selPacote,setSelPacote]= useState(null); // null = auto
+  const [filterUtil,  setFilterUtil]  = useState("todos");
+  const [filterLocal, setFilterLocal] = useState("todos");
+  const avail = [...meats]
+    .filter(m=>m.pesoTotal>0)
+    .filter(m=>filterUtil==="todos"||m.utilidade===filterUtil)
+    .filter(m=>filterLocal==="todos"||m.local===filterLocal)
+    .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
+  const [sel,      setSel]      = useState("");
+  const [selPacote,setSelPacote]= useState(null);
   const [form,     setForm]     = useState({pesoRetirado:"",dataSaida:TODAY,motivo:"churrasco",localDestino:"",eventoVinculado:"",observacao:""});
   const [ok,       setOk]       = useState(false);
   const set = k=>e=>setForm(f=>({...f,[k]:e.target.value}));
@@ -1368,7 +1402,6 @@ function Saida({meats,onRegister,setTab}) {
   const isTransfer = form.motivo==="transferência";
   const locaisDestino = meat ? LOCAIS.filter(l=>l!==meat.local) : LOCAIS;
 
-  // Pacotes ativos do item selecionado
   const meatPacotes = (meat?.pacotes||[]).filter(p=>p.status!=="consumido");
   const selectedPac  = meatPacotes.find(p=>p.id===selPacote);
   const maxPeso      = selPacote && selectedPac ? selectedPac.pesoAtual : meat?.pesoTotal||0;
@@ -1384,6 +1417,9 @@ function Saida({meats,onRegister,setTab}) {
     const p = meatPacotes.find(x=>x.id===pid);
     if(p) setForm(f=>({...f,pesoRetirado:p.pesoAtual}));
   };
+
+  // Locais que têm itens disponíveis
+  const locaisComItem = LOCAIS.filter(l=>meats.some(m=>m.pesoTotal>0&&m.local===l));
 
   const submit = () => {
     if(!sel) return alert("Selecione uma carne.");
@@ -1415,6 +1451,43 @@ function Saida({meats,onRegister,setTab}) {
         </Card>
       )}
       <Card>
+        {/* Filtros: utilidade + local */}
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+            {[
+              {val:"todos",     label:"Tudo"},
+              {val:"churrasco", label:"🔥 Churrasco"},
+              {val:"consumo",   label:"🍽️ Consumo"},
+            ].map(u=>(
+              <button key={u.val} onClick={()=>{setFilterUtil(u.val);setSel("");}}
+                style={{background:filterUtil===u.val?C.primary+"22":C.light,
+                  color:filterUtil===u.val?C.primary:C.muted,
+                  border:`1px solid ${filterUtil===u.val?C.primary:C.border}`,
+                  borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                {u.label}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <button onClick={()=>{setFilterLocal("todos");setSel("");}}
+              style={{background:filterLocal==="todos"?C.info+"22":C.light,
+                color:filterLocal==="todos"?C.info:C.muted,
+                border:`1px solid ${filterLocal==="todos"?C.info:C.border}`,
+                borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+              📍 Todos locais
+            </button>
+            {locaisComItem.map(l=>(
+              <button key={l} onClick={()=>{setFilterLocal(l);setSel("");}}
+                style={{background:filterLocal===l?C.info+"22":C.light,
+                  color:filterLocal===l?C.info:C.muted,
+                  border:`1px solid ${filterLocal===l?C.info:C.border}`,
+                  borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Selecionar carne */}
         <FLabel>Selecionar carne *</FLabel>
         <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto",marginBottom:14,paddingRight:4}}>
