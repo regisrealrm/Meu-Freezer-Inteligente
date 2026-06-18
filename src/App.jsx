@@ -18,7 +18,7 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db    = getDatabase(fbApp);
-const DB_PATH = "mfi/data";
+const DB_PATH = "mfi4/data";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento"];
@@ -175,6 +175,12 @@ function Dashboard({meats,exits,alerts}) {
   const locaisAtivos = LOCAIS.filter(l=>meats.some(m=>m.local===l));
   const kgByLocal    = l => meats.filter(m=>m.local===l).reduce((s,m)=>s+m.pesoTotal,0);
 
+  // Origem breakdown
+  const natItems = meats.filter(m=>m.origem==="natural");
+  const solItems = meats.filter(m=>m.origem==="do sol");
+  const kgNat    = natItems.reduce((s,m)=>s+m.pesoTotal,0);
+  const kgSol    = solItems.reduce((s,m)=>s+m.pesoTotal,0);
+
   const boxes = [
     {id:"estoque", icon:"🧊", label:"Total de estoque", value:fmtKg(totalKg),          color:C.primary},
     {id:"tipos",   icon:"📦", label:"Tipos no estoque", value:`${byTipo.length} tipos`, color:C.info},
@@ -185,7 +191,7 @@ function Dashboard({meats,exits,alerts}) {
   return (
     <div>
       {/* ── 2×2 clickable stat cards ─────────────────── */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
         {boxes.map(b=>{
           const active = open===b.id;
           return (
@@ -205,6 +211,24 @@ function Dashboard({meats,exits,alerts}) {
           );
         })}
       </div>
+
+      {/* ── Natural / Do Sol ─────────────────────────── */}
+      {(kgNat>0||kgSol>0)&&(
+        <div style={{display:"flex",gap:10,marginBottom:12}}>
+          <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,
+            borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.success}`}}>
+            <div style={{fontSize:11,color:C.success,fontWeight:700,marginBottom:4}}>🌿 Natural</div>
+            <div style={{fontSize:20,fontWeight:800,color:C.success}}>{fmtKg(kgNat)}</div>
+            <div style={{fontSize:11,color:C.muted}}>{natItems.length} item{natItems.length!==1?"s":""}</div>
+          </div>
+          <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,
+            borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.warning}`}}>
+            <div style={{fontSize:11,color:C.warning,fontWeight:700,marginBottom:4}}>☀️ Do Sol</div>
+            <div style={{fontSize:20,fontWeight:800,color:C.warning}}>{fmtKg(kgSol)}</div>
+            <div style={{fontSize:11,color:C.muted}}>{solItems.length} item{solItems.length!==1?"s":""}</div>
+          </div>
+        </div>
+      )}
 
       {/* ── Expandable panels ────────────────────────── */}
       {open==="estoque"&&(
@@ -524,13 +548,12 @@ function Estoque({meats,setTab,onTransfer}) {
                   <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                       {[
-                        {icon:"📍",label:"Local",         value:detail.local},
-                        {icon:"📅",label:"Data de entrada",value:`${fmtDate(detail.dataEntrada)} · ${diffDays(detail.dataEntrada,TODAY)}d`},
-                        detail.origem&&{icon:detail.origem==="do sol"?"☀️":"🌿",label:"Origem",value:detail.origem==="do sol"?"Do Sol":"Natural"},
-                        detail.dataValidade&&{icon:"⏳",label:"Validade",value:(()=>{const d=diffDays(TODAY,detail.dataValidade);return `${fmtDate(detail.dataValidade)} (${d}d)`;})()},
-                        detail.corte&&{icon:"🔪",label:"Corte",value:detail.corte},
-                        detail.precoPago&&{icon:"💰",label:"Preço pago",  value:fmtR(detail.precoPago)},
-                        detail.precoKg &&{icon:"🏷️",label:"Preço/kg",    value:fmtR(detail.precoKg)},
+                        {icon:"📍", label:"Local",          value:detail.local},
+                        {icon:"📅", label:"Data de entrada", value:`${fmtDate(detail.dataEntrada)} · ${diffDays(detail.dataEntrada,TODAY)}d`},
+                        detail.corte&&{icon:"🔪", label:"Corte", value:detail.corte},
+                        detail.origem&&{icon:detail.origem==="do sol"?"☀️":"🌿", label:"Origem", value:detail.origem==="do sol"?"Do Sol":"Natural"},
+                        {icon:"⚖️", label:"Peso total", value:fmtKg(detail.pesoTotal)},
+                        {icon:"📦", label:"Nº de pacotes", value:`${(detail.pacotes||[]).filter(p=>p.status!=="consumido").length||detail.quantidadePecas||1} pacote${((detail.pacotes||[]).filter(p=>p.status!=="consumido").length||detail.quantidadePecas||1)!==1?"s":""}`},
                       ].filter(Boolean).map((row,i)=>(
                         <div key={i} style={{background:C.light,borderRadius:8,padding:"10px 12px"}}>
                           <div style={{fontSize:10,color:C.muted,marginBottom:3,fontWeight:600}}>
@@ -541,28 +564,32 @@ function Estoque({meats,setTab,onTransfer}) {
                       ))}
                     </div>
 
-                    {/* Pacotes individuais */}
-                    {detail.pacotes?.length>0&&(
+                    {/* Pacotes individuais com peso de cada um */}
+                    {(detail.pacotes?.length>0)&&(
                       <div style={{marginTop:10}}>
                         <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:6}}>
-                          📦 Pacotes ({detail.pacotes.filter(p=>p.status!=="consumido").length} ativos)
+                          📦 Peso de cada pacote
                         </div>
                         {detail.pacotes.map((p,i)=>(
                           <div key={p.id||i} style={{display:"flex",justifyContent:"space-between",
-                            alignItems:"center",padding:"5px 8px",borderRadius:6,marginBottom:4,
-                            background:p.status==="consumido"?C.border+"33":
-                                       p.status==="aberto"?C.warning+"18":C.light}}>
-                            <span style={{fontSize:12,color:p.status==="consumido"?C.dim:C.text}}>
+                            alignItems:"center",padding:"7px 10px",borderRadius:8,marginBottom:4,
+                            background:p.status==="consumido"?"transparent":
+                                       p.status==="aberto"?C.warning+"18":C.light,
+                            opacity:p.status==="consumido"?0.4:1}}>
+                            <span style={{fontSize:13,fontWeight:600,color:C.text}}>
                               Pacote {i+1}
-                              {p.status==="consumido"&&<span style={{color:C.dim}}> · consumido</span>}
-                              {p.status==="aberto"&&<span style={{color:C.warning,fontWeight:600}}> · 🔓 aberto</span>}
+                              {p.status==="aberto"&&<span style={{color:C.warning,fontSize:11}}> · 🔓 aberto</span>}
+                              {p.status==="consumido"&&<span style={{color:C.dim,fontSize:11}}> · consumido</span>}
                             </span>
-                            <span style={{fontWeight:700,fontSize:13,
-                              color:p.status==="consumido"?C.dim:
-                                    p.status==="aberto"?C.warning:C.primary}}>
-                              {fmtKg(p.pesoAtual)}
-                              {p.pesoAtual!==p.peso&&<span style={{fontSize:10,color:C.dim}}> / {fmtKg(p.peso)}</span>}
-                            </span>
+                            <div style={{textAlign:"right"}}>
+                              <span style={{fontWeight:800,fontSize:14,
+                                color:p.status==="consumido"?C.dim:p.status==="aberto"?C.warning:C.primary}}>
+                                {fmtKg(p.pesoAtual)}
+                              </span>
+                              {p.pesoAtual!==p.peso&&(
+                                <div style={{fontSize:10,color:C.dim}}>original: {fmtKg(p.peso)}</div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -635,36 +662,41 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
   const [ok,       setOk]      = useState(false);
   const [addMode,  setAddMode] = useState(null);
   const [addForm,  setAddForm] = useState({pesoAdd:"",qtdAdd:"1",precoAdd:""});
-  const [pesosDiff,setPesosDiff]= useState(false);   // pesos individuais por pacote
-  const [pesosInd, setPesosInd] = useState([""]);     // array de pesos individuais
+  const [pesosInd, setPesosInd] = useState([""]);
   const set  = k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const setA = k=>e=>setAddForm(f=>({...f,[k]:e.target.value}));
 
   const qtd = parseInt(form.quantidadePecas)||1;
 
-  // Sincroniza array de pesos individuais com qtd
+  // Sincroniza array de pesos com qtd
   const handleQtdChange = (e) => {
     const n = Math.max(1, parseInt(e.target.value)||1);
     setForm(f=>({...f,quantidadePecas:String(n)}));
     setPesosInd(prev=>{
-      const arr = [...prev];
+      const arr=[...prev];
       while(arr.length<n) arr.push(arr[0]||"");
       return arr.slice(0,n);
     });
   };
 
-  const calcPrecoKg = () => {
-    const total = pesosDiff
-      ? pesosInd.reduce((s,p)=>s+(parseFloat(p)||0),0)
-      : parseFloat(form.pesoTotal)*qtd;
-    const pago = parseFloat(form.precoPago);
-    if(pago && total>0)
-      setForm(f=>({...f,precoKg:(pago/total).toFixed(2)}));
+  // Capitaliza primeira letra do corte
+  const handleCorteChange = (e) => {
+    const val = e.target.value;
+    const cap = val.charAt(0).toUpperCase() + val.slice(1);
+    setForm(f=>({...f,corte:cap}));
   };
 
-  const totalPesosInd = pesosDiff
+  const calcPrecoKg = () => {
+    const total = qtd>1
+      ? pesosInd.reduce((s,p)=>s+(parseFloat(p)||0),0)
+      : parseFloat(form.pesoTotal)||0;
+    const pago = parseFloat(form.precoPago);
+    if(pago && total>0) setForm(f=>({...f,precoKg:(pago/total).toFixed(2)}));
+  };
+
+  const totalPesosInd = qtd>1
     ? pesosInd.reduce((s,p)=>s+(parseFloat(p)||0),0)
-    : (parseFloat(form.pesoTotal)||0)*qtd;
+    : parseFloat(form.pesoTotal)||0;
 
   // Itens correspondentes no estoque
   const matchKey = `${form.tipo}:${form.corte.trim().toLowerCase()}`;
@@ -675,22 +707,22 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
   const selectedForAdd = meats.find(m=>m.id===addMode);
 
   const submit = () => {
-    if(pesosDiff) {
+    if(qtd>1) {
       if(pesosInd.some(p=>!(parseFloat(p)>0))) return alert("Informe o peso de todos os pacotes.");
     } else {
       if(!form.pesoTotal||+form.pesoTotal<=0) return alert("Informe um peso válido.");
     }
-    const pacotesPesos = pesosDiff
+    const pacotesPesos = qtd>1
       ? pesosInd.map(p=>parseFloat(p))
-      : Array(qtd).fill(parseFloat(form.pesoTotal));
+      : [parseFloat(form.pesoTotal)];
     onAdd({...form,
-      pesoTotal: pacotesPesos[0],  // peso por pacote (ou único)
+      pesoTotal: pacotesPesos[0],
       pacotesPesos,
       quantidadePecas: qtd,
       precoPago: parseFloat(form.precoPago)||null,
       precoKg:   parseFloat(form.precoKg)||null,
     });
-    setForm(blank); setAddMode(null); setPesosDiff(false); setPesosInd([""]);
+    setForm(blank); setAddMode(null); setPesosInd([""]);
     setOk(true); setTimeout(()=>setOk(false),3000);
   };
 
@@ -728,7 +760,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
           <FWrap>
             <FLabel>Corte</FLabel>
             <input list="catalog-cortes" style={inputBase}
-              value={form.corte} onChange={set("corte")} placeholder="Digite ou selecione..."/>
+              value={form.corte} onChange={handleCorteChange} placeholder="Digite ou selecione..."/>
             <datalist id="catalog-cortes">
               {catalog.filter(c=>c.tipo===form.tipo).map(c=>(
                 <option key={c.key} value={c.nome}/>
@@ -807,52 +839,36 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
                 onChange={handleQtdChange} type="number" step="1" min="1" placeholder="1"
                 onFocus={e=>e.target.select()}/>
 
-              {/* Peso por pacote (ou único) */}
-              {!pesosDiff&&(
-                <FInput label={qtd>1?"Peso por pacote (kg) *":"Peso total (kg) *"}
+              {/* Peso único quando qtd = 1 */}
+              {qtd===1&&(
+                <FInput label="Peso total (kg) *"
                   value={form.pesoTotal} onChange={set("pesoTotal")} onFocus={e=>e.target.select()}
                   type="number" step="0.1" min="0.1" placeholder="Ex: 1.5"/>
               )}
             </div>
 
-            {/* Pesos individuais quando qtd > 1 */}
+            {/* Pesos individuais quando qtd > 1 — sempre mostra */}
             {qtd>1&&(
               <FWrap>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                  <FLabel>Peso de cada pacote</FLabel>
-                  <button onClick={()=>setPesosDiff(p=>!p)}
-                    style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
-                      padding:"3px 10px",fontSize:11,color:C.muted,cursor:"pointer"}}>
-                    {pesosDiff?"✕ Cancelar":"📝 Pesos diferentes"}
-                  </button>
+                <FLabel>Peso de cada pacote (kg) *</FLabel>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8,marginBottom:6}}>
+                  {pesosInd.map((p,i)=>(
+                    <div key={i}>
+                      <div style={{fontSize:11,color:C.muted,marginBottom:3}}>Pacote {i+1}</div>
+                      <input style={inputBase} type="number" step="0.1" min="0"
+                        value={p} placeholder="kg"
+                        onFocus={e=>e.target.select()}
+                        onChange={e=>{
+                          const arr=[...pesosInd];
+                          arr[i]=e.target.value;
+                          setPesosInd(arr);
+                        }}/>
+                    </div>
+                  ))}
                 </div>
-                {pesosDiff&&(
-                  <>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
-                      {pesosInd.map((p,i)=>(
-                        <div key={i}>
-                          <div style={{fontSize:11,color:C.muted,marginBottom:3}}>Pacote {i+1}</div>
-                          <input style={inputBase} type="number" step="0.1" min="0"
-                            value={p} placeholder="kg"
-                            onFocus={e=>e.target.select()}
-                            onChange={e=>{
-                              const arr=[...pesosInd];
-                              arr[i]=e.target.value;
-                              setPesosInd(arr);
-                            }}/>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{fontSize:12,color:C.primary,fontWeight:700,marginTop:8}}>
-                      Total: {fmtKg(totalPesosInd)}
-                    </div>
-                  </>
-                )}
-                {!pesosDiff&&(
-                  <div style={{fontSize:12,color:C.muted}}>
-                    Total: <strong style={{color:C.primary}}>{fmtKg(totalPesosInd)}</strong> ({qtd} × {fmtKg(parseFloat(form.pesoTotal)||0)})
-                  </div>
-                )}
+                <div style={{fontSize:12,color:C.primary,fontWeight:700}}>
+                  Total: {fmtKg(totalPesosInd)}
+                </div>
               </FWrap>
             )}
 
