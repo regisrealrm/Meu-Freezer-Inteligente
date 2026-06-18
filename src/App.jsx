@@ -1413,7 +1413,8 @@ function Relatorios({meats,exits}) {
 }
 
 // ─── ROOT ──────────────────────────────────────────────────────────────────────
-const STORAGE_KEY = "mfi3_data";
+const STORAGE_KEY  = "mfi3_data";
+const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.com/${DB_PATH}.json`;
 
 export default function App() {
   const [meats,       setMeats]       = useState([]);
@@ -1426,12 +1427,12 @@ export default function App() {
   const [showBackup,  setShowBackup]  = useState(false);
   const [importTxt,   setImportTxt]   = useState("");
   const [importMsg,   setImportMsg]   = useState("");
-  const [currentUser, setCurrentUser] = useState(null); // usuário atual
-  const [changingUser,setChangingUser]= useState(false); // mostrar troca de usuário
+  const [currentUser, setCurrentUser] = useState(null);
+  const [changingUser,setChangingUser]= useState(false);
 
-  const lastSaved = useRef(""); // hash do último dado salvo/recebido
+  const lastSaved = useRef("");
 
-  // ── LOAD + SYNC em tempo real (Firebase) ──────────────────────────────────
+  // ── LOAD + SYNC (Firebase onValue — leitura em tempo real) ────────────────
   useEffect(()=>{
     try {
       const savedUser = localStorage.getItem("mfi3_user");
@@ -1441,39 +1442,48 @@ export default function App() {
     const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
       const data = snapshot.val();
       if(data) {
-        // Marca o hash dos dados recebidos — evita salvar de volta imediatamente
-        lastSaved.current = JSON.stringify(data);
+        const hash = JSON.stringify(data);
+        lastSaved.current = hash;
         setMeats(data.meats    || []);
         setExits(data.exits    || []);
         setCatalog(data.catalog || []);
       }
       setStorageOk(true);
       setLoaded(true);
-    }, (err)=>{
-      console.error("Firebase read error:", err);
+    }, ()=>{
       setStorageOk(false);
       setLoaded(true);
     });
     return ()=>unsubscribe();
   },[]);
 
-  // ── SAVE (debounce 800ms, só salva quando dado mudou localmente) ──────────
+  // ── SAVE via REST API (fetch direto — mais confiável que SDK set()) ────────
   useEffect(()=>{
     if(!loaded) return;
     const currentHash = JSON.stringify({meats, exits, catalog});
-    // Se o hash é igual ao último recebido/salvo, não precisa salvar
     if(currentHash === lastSaved.current) return;
 
     setSaveStatus("saving");
-    const t = setTimeout(()=>{
-      lastSaved.current = currentHash; // otimista: marca como salvo
-      set(dbRef(db, DB_PATH), {meats, exits, catalog})
-        .then(()=>setSaveStatus("saved"))
-        .catch(err=>{
-          lastSaved.current = ""; // reseta para tentar salvar de novo
-          setSaveStatus("error");
-          console.error("Firebase write error:", err);
+    const t = setTimeout(async ()=>{
+      const ctrl    = new AbortController();
+      const timeout = setTimeout(()=>ctrl.abort(), 10000);
+      try {
+        lastSaved.current = currentHash;
+        const res = await fetch(FIREBASE_REST, {
+          method:"PUT",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({meats, exits, catalog}),
+          signal: ctrl.signal,
         });
+        clearTimeout(timeout);
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        setSaveStatus("saved");
+      } catch(err){
+        clearTimeout(timeout);
+        lastSaved.current = ""; // permite tentar novamente
+        setSaveStatus("error");
+        console.error("Save error:", err.message);
+      }
     }, 800);
     return ()=>clearTimeout(t);
   },[meats, exits, catalog, loaded]);
