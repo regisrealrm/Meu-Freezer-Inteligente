@@ -25,7 +25,7 @@ const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento"];
 const LOCAIS = ["Freezer 1","Freezer 2","Freezer Ilha","Geladeira","Congelador"];
 const MOTIVOS= ["consumo","churrasco","descarte","doação","transferência"];
 const USERS  = ["Régis","Luciene","Hugo","Lavínia"];
-const ORIGENS= ["in natura","do sol","temperado","temperada"];
+const ORIGENS= ["in natura","do sol","temperada"];
 
 // ─── PACOTES HELPERS ──────────────────────────────────────────────────────────
 const makePacote = (peso) => ({id:uid(), peso, pesoAtual:peso, status:"disponível"});
@@ -478,9 +478,9 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                 <span style={{fontWeight:700,fontSize:15,color:C.text}}>{m.corte||m.tipo}</span>
                 <span style={{fontSize:11,color:C.muted,background:C.light,padding:"2px 7px",borderRadius:4,textTransform:"capitalize"}}>{m.tipo}</span>
                 {m.origem&&<span style={{fontSize:11,padding:"2px 7px",borderRadius:4,fontWeight:600,
-                  background:m.origem==="do sol"?"#2A1A00":m.origem==="temperado"?"#2A1000":"#0A2010",
-                  color:m.origem==="do sol"?C.warning:m.origem==="temperado"?"#FF7043":C.success}}>
-                  {m.origem==="do sol"?"☀️ Do Sol":m.origem==="temperado"?"🌶️ Temperado":"🌿 In Natura"}
+                  background:m.origem==="do sol"?"#2A1A00":m.origem==="temperada"?"#2A1000":"#0A2010",
+                  color:m.origem==="do sol"?C.warning:m.origem==="temperada"?"#FF7043":C.success}}>
+                  {m.origem==="do sol"?"☀️ Do Sol":m.origem==="temperada"?"🌶️ Temperada":"🌿 In Natura"}
                 </span>}
                 {al!=="ok"&&<Badge label={ai.label} color={ai.color}/>}
               </div>
@@ -583,11 +583,11 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editingOrigem?10:0}}>
                         <div>
                           <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:3}}>
-                            {detail.origem==="do sol"?"☀️":detail.origem==="temperado"?"🌶️":"🌿"} Origem
+                            {detail.origem==="do sol"?"☀️":detail.origem==="temperada"?"🌶️":"🌿"} Origem
                           </div>
                           {!editingOrigem&&(
                             <div style={{fontWeight:600,fontSize:14,color:C.text}}>
-                              {detail.origem==="do sol"?"Do Sol":detail.origem==="temperado"?"Temperado":detail.origem==="in natura"?"In Natura":"Não definida"}
+                              {detail.origem==="do sol"?"Do Sol":detail.origem==="temperada"?"Temperada":detail.origem==="in natura"?"In Natura":"Não definida"}
                             </div>
                           )}
                         </div>
@@ -602,7 +602,6 @@ function Estoque({meats,setTab,onTransfer,onUpdate}) {
                           {[
                             {val:"in natura",  label:"🌿 In Natura",  color:C.success},
                             {val:"do sol",     label:"☀️ Do Sol",     color:C.warning},
-                            {val:"temperado",  label:"🌶️ Temperado",  color:"#FF7043"},
                             {val:"temperada",  label:"🌶️ Temperada",  color:"#FF7043"},
                           ].map(o=>(
                             <button key={o.val}
@@ -890,7 +889,6 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <OrigBtn val="in natura"  label="🌿 In Natura"/>
             <OrigBtn val="do sol"     label="☀️ Do Sol"/>
-            <OrigBtn val="temperado"  label="🌶️ Temperado"/>
             <OrigBtn val="temperada"  label="🌶️ Temperada"/>
           </div>
         </FWrap>
