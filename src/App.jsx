@@ -25,19 +25,25 @@ const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento"];
 const LOCAIS = ["Freezer 1","Freezer 2","Freezer Ilha","Geladeira","Congelador"];
 const MOTIVOS= ["consumo","churrasco","descarte","doação","transferência"];
 const USERS  = ["Régis","Luciene","Hugo","Lavínia"];
-const ORIGENS= ["natural","do sol"];
+const ORIGENS= ["in natura","do sol"];
 
 // ─── PACOTES HELPERS ──────────────────────────────────────────────────────────
 const makePacote = (peso) => ({id:uid(), peso, pesoAtual:peso, status:"disponível"});
 
-// Aplica saída nos pacotes (abertos primeiro, depois disponíveis — PEPS)
-const applyExitToPacotes = (pacotes, pesoRetirado) => {
+// Aplica saída nos pacotes (pacote preferido primeiro, depois abertos, depois disponíveis — PEPS)
+const applyExitToPacotes = (pacotes, pesoRetirado, preferredId) => {
   let rem = pesoRetirado;
   const updated = pacotes.map(p=>({...p}));
-  const ordem = [
-    ...updated.filter(p=>p.status==="aberto"),
-    ...updated.filter(p=>p.status==="disponível"),
-  ];
+  const ordem = preferredId
+    ? [
+        ...updated.filter(p=>p.id===preferredId),
+        ...updated.filter(p=>p.id!==preferredId&&p.status==="aberto"),
+        ...updated.filter(p=>p.id!==preferredId&&p.status==="disponível"),
+      ]
+    : [
+        ...updated.filter(p=>p.status==="aberto"),
+        ...updated.filter(p=>p.status==="disponível"),
+      ];
   for(const p of ordem) {
     if(rem<=0) break;
     const idx = updated.findIndex(u=>u.id===p.id);
@@ -176,7 +182,7 @@ function Dashboard({meats,exits,alerts}) {
   const kgByLocal    = l => meats.filter(m=>m.local===l).reduce((s,m)=>s+m.pesoTotal,0);
 
   // Origem breakdown
-  const natItems = meats.filter(m=>m.origem==="natural");
+  const natItems = meats.filter(m=>m.origem==="in natura");
   const solItems = meats.filter(m=>m.origem==="do sol");
   const kgNat    = natItems.reduce((s,m)=>s+m.pesoTotal,0);
   const kgSol    = solItems.reduce((s,m)=>s+m.pesoTotal,0);
@@ -217,7 +223,7 @@ function Dashboard({meats,exits,alerts}) {
         <div style={{display:"flex",gap:10,marginBottom:12}}>
           <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,
             borderRadius:12,padding:"12px 14px",borderLeft:`4px solid ${C.success}`}}>
-            <div style={{fontSize:11,color:C.success,fontWeight:700,marginBottom:4}}>🌿 Natural</div>
+            <div style={{fontSize:11,color:C.success,fontWeight:700,marginBottom:4}}>🌿 In Natura</div>
             <div style={{fontSize:20,fontWeight:800,color:C.success}}>{fmtKg(kgNat)}</div>
             <div style={{fontSize:11,color:C.muted}}>{natItems.length} item{natItems.length!==1?"s":""}</div>
           </div>
@@ -465,7 +471,7 @@ function Estoque({meats,setTab,onTransfer}) {
                 {m.origem&&<span style={{fontSize:11,padding:"2px 7px",borderRadius:4,fontWeight:600,
                   background:m.origem==="do sol"?"#2A1A00":"#0A2010",
                   color:m.origem==="do sol"?C.warning:C.success}}>
-                  {m.origem==="do sol"?"☀️ Do Sol":"🌿 Natural"}
+                  {m.origem==="do sol"?"☀️ Do Sol":"🌿 In Natura"}
                 </span>}
                 {al!=="ok"&&<Badge label={ai.label} color={ai.color}/>}
               </div>
@@ -551,7 +557,7 @@ function Estoque({meats,setTab,onTransfer}) {
                         {icon:"📍", label:"Local",          value:detail.local},
                         {icon:"📅", label:"Data de entrada", value:`${fmtDate(detail.dataEntrada)} · ${diffDays(detail.dataEntrada,TODAY)}d`},
                         detail.corte&&{icon:"🔪", label:"Corte", value:detail.corte},
-                        detail.origem&&{icon:detail.origem==="do sol"?"☀️":"🌿", label:"Origem", value:detail.origem==="do sol"?"Do Sol":"Natural"},
+                        detail.origem&&{icon:detail.origem==="do sol"?"☀️":"🌿", label:"Origem", value:detail.origem==="do sol"?"Do Sol":"In Natura"},
                         {icon:"⚖️", label:"Peso total", value:fmtKg(detail.pesoTotal)},
                         {icon:"📦", label:"Nº de pacotes", value:`${(detail.pacotes||[]).filter(p=>p.status!=="consumido").length||detail.quantidadePecas||1} pacote${((detail.pacotes||[]).filter(p=>p.status!=="consumido").length||detail.quantidadePecas||1)!==1?"s":""}`},
                       ].filter(Boolean).map((row,i)=>(
@@ -773,7 +779,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
         <FWrap>
           <FLabel>Origem</FLabel>
           <div style={{display:"flex",gap:8}}>
-            <OrigBtn val="natural"   label="🌿 Natural"/>
+            <OrigBtn val="in natura" label="🌿 In Natura"/>
             <OrigBtn val="do sol"    label="☀️ Do Sol"/>
           </div>
         </FWrap>
@@ -900,14 +906,31 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
 // ─── SAÍDA ────────────────────────────────────────────────────────────────────
 function Saida({meats,onRegister,setTab}) {
   const avail = [...meats].filter(m=>m.pesoTotal>0).sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
-  const [sel,setSel]   = useState(avail[0]?.id||"");
-  const [form,setForm] = useState({pesoRetirado:"",dataSaida:TODAY,motivo:"churrasco",localDestino:"",eventoVinculado:"",observacao:""});
-  const [ok,setOk]     = useState(false);
+  const [sel,      setSel]      = useState(avail[0]?.id||"");
+  const [selPacote,setSelPacote]= useState(null); // null = auto
+  const [form,     setForm]     = useState({pesoRetirado:"",dataSaida:TODAY,motivo:"churrasco",localDestino:"",eventoVinculado:"",observacao:""});
+  const [ok,       setOk]       = useState(false);
   const set = k=>e=>setForm(f=>({...f,[k]:e.target.value}));
   const meat       = avail.find(m=>m.id===sel);
   const isTransfer = form.motivo==="transferência";
-  // Locais disponíveis para destino (excluindo o local atual da carne)
   const locaisDestino = meat ? LOCAIS.filter(l=>l!==meat.local) : LOCAIS;
+
+  // Pacotes ativos do item selecionado
+  const meatPacotes = (meat?.pacotes||[]).filter(p=>p.status!=="consumido");
+  const selectedPac  = meatPacotes.find(p=>p.id===selPacote);
+  const maxPeso      = selPacote && selectedPac ? selectedPac.pesoAtual : meat?.pesoTotal||0;
+
+  const handleMeatSelect = (m) => {
+    setSel(m.id);
+    setSelPacote(null);
+    setForm(f=>({...f,localDestino:"",pesoRetirado:m.pesoTotal}));
+  };
+
+  const handlePacoteSelect = (pid) => {
+    setSelPacote(pid);
+    const p = meatPacotes.find(x=>x.id===pid);
+    if(p) setForm(f=>({...f,pesoRetirado:p.pesoAtual}));
+  };
 
   const submit = () => {
     if(!sel) return alert("Selecione uma carne.");
@@ -916,10 +939,13 @@ function Saida({meats,onRegister,setTab}) {
     } else {
       if(!form.pesoRetirado||+form.pesoRetirado<=0) return alert("Informe o peso retirado.");
       const peso = parseFloat(form.pesoRetirado);
-      if(meat&&peso>meat.pesoTotal) return alert(`Estoque insuficiente. Disponível: ${fmtKg(meat.pesoTotal)}`);
+      if(peso>maxPeso) return alert(`Peso maior que o disponível: ${fmtKg(maxPeso)}`);
     }
-    onRegister({carneId:sel,...form,pesoRetirado:isTransfer?null:parseFloat(form.pesoRetirado)});
-    setSel("");
+    onRegister({carneId:sel,...form,
+      pesoRetirado:isTransfer?null:parseFloat(form.pesoRetirado),
+      pacoteId:selPacote||null,
+    });
+    setSel(""); setSelPacote(null);
     setForm({pesoRetirado:"",dataSaida:TODAY,motivo:"churrasco",localDestino:"",eventoVinculado:"",observacao:""});
     setOk(true);
     setTimeout(()=>setOk(false),3000);
@@ -931,29 +957,65 @@ function Saida({meats,onRegister,setTab}) {
       {ok&&(
         <Card style={{background:"#0B2A1E",borderColor:C.success,marginBottom:14}}>
           <span style={{color:C.success,fontWeight:700}}>
-            {isTransfer?"🔄 Transferência registrada! Local atualizado.":"✅ Saída registrada! Estoque atualizado."}
+            {isTransfer?"🔄 Transferência registrada!":"✅ Saída registrada! Estoque atualizado."}
           </span>
         </Card>
       )}
       <Card>
+        {/* Selecionar carne */}
         <FLabel>Selecionar carne *</FLabel>
-        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:250,overflowY:"auto",marginBottom:14,paddingRight:4}}>
+        <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto",marginBottom:14,paddingRight:4}}>
           {avail.length===0&&<div style={{color:C.muted}}>Nenhuma carne disponível.</div>}
           {avail.map(m=>(
-            <div key={m.id} onClick={()=>{setSel(m.id);setForm(f=>({...f,localDestino:"",pesoRetirado:m.pesoTotal}));}}
+            <div key={m.id} onClick={()=>handleMeatSelect(m)}
               style={{background:sel===m.id?C.light:"#0A1520",border:`2px solid ${sel===m.id?C.primary:C.border}`,borderRadius:8,padding:"10px 12px",cursor:"pointer"}}>
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontWeight:600}}>{m.corte||m.tipo} <span style={{color:C.muted,fontWeight:400,fontSize:13}}>({m.tipo})</span></span>
                 <span style={{fontWeight:700,color:C.primary}}>{fmtKg(m.pesoTotal)}</span>
               </div>
-              <div style={{fontSize:11,color:C.muted}}>{m.local} · Entrada: {fmtDate(m.dataEntrada)}</div>
+              <div style={{fontSize:11,color:C.muted}}>{m.local} · {(m.pacotes||[]).filter(p=>p.status!=="consumido").length||1} pacote{((m.pacotes||[]).filter(p=>p.status!=="consumido").length||1)!==1?"s":""}</div>
             </div>
           ))}
         </div>
 
+        {/* Selecionar pacote (quando há mais de 1 ativo) */}
+        {meat&&meatPacotes.length>1&&!isTransfer&&(
+          <div style={{marginBottom:14}}>
+            <FLabel>De qual pacote retirar?</FLabel>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {/* Opção auto */}
+              <div onClick={()=>{setSelPacote(null);setForm(f=>({...f,pesoRetirado:meat.pesoTotal}));}}
+                style={{background:!selPacote?C.primary+"18":"#0A1520",
+                  border:`2px solid ${!selPacote?C.primary:C.border}`,
+                  borderRadius:8,padding:"8px 12px",cursor:"pointer",
+                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:13,color:!selPacote?C.primary:C.muted,fontWeight:600}}>🔄 Automático (aberto primeiro)</span>
+                <span style={{fontSize:12,color:C.muted}}>{fmtKg(meat.pesoTotal)} total</span>
+              </div>
+              {/* Cada pacote */}
+              {meatPacotes.map((p,i)=>(
+                <div key={p.id} onClick={()=>handlePacoteSelect(p.id)}
+                  style={{background:selPacote===p.id?C.warning+"18":"#0A1520",
+                    border:`2px solid ${selPacote===p.id?C.warning:C.border}`,
+                    borderRadius:8,padding:"8px 12px",cursor:"pointer",
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:13,fontWeight:600,color:selPacote===p.id?C.warning:C.text}}>
+                    Pacote {i+1}
+                    {p.status==="aberto"&&<span style={{color:C.warning,fontSize:11}}> · 🔓 aberto</span>}
+                  </span>
+                  <span style={{fontWeight:800,color:selPacote===p.id?C.warning:C.primary,fontSize:14}}>{fmtKg(p.pesoAtual)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {meat&&(
           <div style={{background:C.light,borderRadius:8,padding:"8px 12px",marginBottom:12,fontSize:13,color:C.info}}>
-            Selecionado: <strong>{meat.corte||meat.tipo}</strong> — {fmtKg(meat.pesoTotal)} · 📍 {meat.local}
+            {selPacote&&selectedPac
+              ? <>Pacote selecionado: <strong style={{color:C.warning}}>{fmtKg(selectedPac.pesoAtual)} disponível</strong></>
+              : <><strong>{meat.corte||meat.tipo}</strong> — {fmtKg(meat.pesoTotal)} · 📍 {meat.local}</>
+            }
           </div>
         )}
 
@@ -963,14 +1025,13 @@ function Saida({meats,onRegister,setTab}) {
             {MOTIVOS.map(v=><option key={v} value={v}>{v}</option>)}
           </FSelect>
 
-          {/* Campos condicionais por motivo */}
           {isTransfer ? (
             <FSelect label="Local de destino *" value={form.localDestino} onChange={set("localDestino")}>
               <option value="">— selecione —</option>
               {locaisDestino.map(l=><option key={l} value={l}>{l}</option>)}
             </FSelect>
           ) : (
-            <FInput label={`Peso retirado (kg)${meat?` — máx ${fmtKg(meat.pesoTotal)}`:""}`}
+            <FInput label={`Peso retirado (kg) — máx ${fmtKg(maxPeso)}`}
               value={form.pesoRetirado} onChange={set("pesoRetirado")} onFocus={e=>e.target.select()} type="number" step="0.1" min="0.1" placeholder="Ex: 1.2"/>
           )}
 
@@ -981,7 +1042,7 @@ function Saida({meats,onRegister,setTab}) {
 
         {isTransfer&&meat&&form.localDestino&&(
           <div style={{background:"#0B2035",border:`1px solid ${C.info}44`,borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:13}}>
-            🔄 <strong>{meat.corte||meat.tipo}</strong> será movida de <strong style={{color:C.warning}}>{meat.local}</strong> para <strong style={{color:C.success}}>{form.localDestino}</strong>
+            🔄 <strong>{meat.corte||meat.tipo}</strong> de <strong style={{color:C.warning}}>{meat.local}</strong> → <strong style={{color:C.success}}>{form.localDestino}</strong>
           </div>
         )}
 
@@ -1493,7 +1554,7 @@ export default function App() {
     } else {
       // Aplica saída nos pacotes individuais
       const pacotesAtuais = m.pacotes||[makePacote(m.pesoTotal)];
-      const pacotesNovos  = applyExitToPacotes(pacotesAtuais, ex.pesoRetirado);
+      const pacotesNovos  = applyExitToPacotes(pacotesAtuais, ex.pesoRetirado, ex.pacoteId);
       const novoTotal     = parseFloat(pacotesNovos.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0).toFixed(3));
       const novoStatus    = getStatusFromPacotes(pacotesNovos);
       const qtdAtiva      = pacotesNovos.filter(p=>p.status!=="consumido").length;
