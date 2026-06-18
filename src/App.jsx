@@ -21,7 +21,7 @@ const db    = getDatabase(fbApp);
 const DB_PATH = "mfi4/data";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento"];
+const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento","frutos do mar","pato"];
 const LOCAIS = ["Freezer 1","Freezer 2","Freezer Ilha","Geladeira","Congelador"];
 const MOTIVOS= ["consumo","churrasco","descarte","doação","transferência"];
 const USERS  = ["Régis","Luciene","Hugo","Lavínia"];
@@ -534,7 +534,7 @@ function Dashboard({meats,exits,alerts}) {
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
+function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
   const [flocal,       setFlocal]       = useState("todos");
   const [selected,     setSelected]     = useState(null);
   const [showXfer,     setShowXfer]     = useState(false);
@@ -545,6 +545,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
   const [editingPacotes,  setEditingPacotes]  = useState(false);
   const [pacotesForm,     setPacotesForm]     = useState({});
   const [merging,         setMerging]         = useState(false);
+  const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [precoForm,       setPrecoForm]       = useState({});
 
   // Count per location for pills
@@ -559,12 +560,12 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
   const openDetail = (id) => {
     setSelected(id); setShowXfer(false); setTransferOk("");
     setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
-    setEditingPacotes(false); setMerging(false);
+    setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
   const closeModal = () => {
     setSelected(null); setShowXfer(false); setTransferOk("");
     setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
-    setEditingPacotes(false); setMerging(false);
+    setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
 
   const doTransfer = (novoLocal) => {
@@ -1012,6 +1013,40 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge}) {
                         </button>
                       </>
                     )}
+
+                    {/* Excluir item */}
+                    <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+                      {!confirmDelete ? (
+                        <button onClick={()=>setConfirmDelete(true)}
+                          style={{width:"100%",background:"transparent",border:`1px solid ${C.danger}55`,
+                            borderRadius:12,padding:"12px",cursor:"pointer",color:C.danger,
+                            fontSize:13,fontWeight:700,display:"flex",justifyContent:"center",
+                            alignItems:"center",gap:8}}>
+                          🗑️ Excluir item do estoque
+                        </button>
+                      ) : (
+                        <div style={{background:"#2A0A0A",border:`1px solid ${C.danger}55`,borderRadius:12,padding:14}}>
+                          <div style={{fontSize:13,color:C.danger,fontWeight:700,marginBottom:4,textAlign:"center"}}>
+                            ⚠️ Confirmar exclusão?
+                          </div>
+                          <div style={{fontSize:11,color:C.muted,textAlign:"center",marginBottom:12}}>
+                            "{detail.corte||detail.tipo}" será removido permanentemente do estoque.
+                          </div>
+                          <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>{ onDelete(detail.id); closeModal(); }}
+                              style={{flex:1,background:C.danger,border:"none",borderRadius:8,
+                                padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                              🗑️ Sim, excluir
+                            </button>
+                            <button onClick={()=>setConfirmDelete(false)}
+                              style={{flex:1,background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                                padding:"11px",cursor:"pointer",color:C.muted,fontSize:13,fontWeight:600}}>
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               );
@@ -2003,6 +2038,7 @@ export default function App() {
   };
   const transferMeat = (id, novoLocal) => setMeats(p=>p.map(m=>m.id===id?{...m,local:novoLocal,feitorPor:currentUser}:m));
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
+  const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
 
   // Mescla dois itens em um — absorve os pacotes do item2 no item1
   const mergeItems = (id1, id2) => {
@@ -2202,7 +2238,7 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
         {tab==="saida"      &&<Saida       meats={active} onRegister={registerExit} setTab={setTab}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog}/>}
