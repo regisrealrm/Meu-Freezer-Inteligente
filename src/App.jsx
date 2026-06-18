@@ -25,7 +25,7 @@ const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento"];
 const LOCAIS = ["Freezer 1","Freezer 2","Freezer Ilha","Geladeira","Congelador"];
 const MOTIVOS= ["consumo","churrasco","descarte","doação","transferência"];
 const USERS  = ["Régis","Luciene","Hugo","Lavínia"];
-const ORIGENS= ["in natura","do sol"];
+const ORIGENS= ["in natura","do sol","temperado"];
 
 // ─── PACOTES HELPERS ──────────────────────────────────────────────────────────
 const makePacote = (peso) => ({id:uid(), peso, pesoAtual:peso, status:"disponível"});
@@ -388,11 +388,12 @@ function Dashboard({meats,exits,alerts}) {
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer}) {
-  const [flocal,    setFlocal]    = useState("todos");
-  const [selected,  setSelected]  = useState(null);
-  const [showXfer,  setShowXfer]  = useState(false);  // transfer step visible?
-  const [transferOk,setTransferOk]= useState("");
+function Estoque({meats,setTab,onTransfer,onUpdate}) {
+  const [flocal,       setFlocal]       = useState("todos");
+  const [selected,     setSelected]     = useState(null);
+  const [showXfer,     setShowXfer]     = useState(false);
+  const [transferOk,   setTransferOk]   = useState("");
+  const [editingOrigem,setEditingOrigem]= useState(false);
 
   // Count per location for pills
   const countBy = loc => meats.filter(m=>m.local===loc).length;
@@ -403,8 +404,8 @@ function Estoque({meats,setTab,onTransfer}) {
 
   const detail = meats.find(m=>m.id===selected);
 
-  const openDetail = (id) => { setSelected(id); setShowXfer(false); setTransferOk(""); };
-  const closeModal = ()   => { setSelected(null); setShowXfer(false); setTransferOk(""); };
+  const openDetail = (id) => { setSelected(id); setShowXfer(false); setTransferOk(""); setEditingOrigem(false); };
+  const closeModal = ()   => { setSelected(null); setShowXfer(false); setTransferOk(""); setEditingOrigem(false); };
 
   const doTransfer = (novoLocal) => {
     onTransfer(selected, novoLocal);
@@ -469,9 +470,9 @@ function Estoque({meats,setTab,onTransfer}) {
                 <span style={{fontWeight:700,fontSize:15,color:C.text}}>{m.corte||m.tipo}</span>
                 <span style={{fontSize:11,color:C.muted,background:C.light,padding:"2px 7px",borderRadius:4,textTransform:"capitalize"}}>{m.tipo}</span>
                 {m.origem&&<span style={{fontSize:11,padding:"2px 7px",borderRadius:4,fontWeight:600,
-                  background:m.origem==="do sol"?"#2A1A00":"#0A2010",
-                  color:m.origem==="do sol"?C.warning:C.success}}>
-                  {m.origem==="do sol"?"☀️ Do Sol":"🌿 In Natura"}
+                  background:m.origem==="do sol"?"#2A1A00":m.origem==="temperado"?"#2A1000":"#0A2010",
+                  color:m.origem==="do sol"?C.warning:m.origem==="temperado"?"#FF7043":C.success}}>
+                  {m.origem==="do sol"?"☀️ Do Sol":m.origem==="temperado"?"🌶️ Temperado":"🌿 In Natura"}
                 </span>}
                 {al!=="ok"&&<Badge label={ai.label} color={ai.color}/>}
               </div>
@@ -557,7 +558,6 @@ function Estoque({meats,setTab,onTransfer}) {
                         {icon:"📍", label:"Local",          value:detail.local},
                         {icon:"📅", label:"Data de entrada", value:`${fmtDate(detail.dataEntrada)} · ${diffDays(detail.dataEntrada,TODAY)}d`},
                         detail.corte&&{icon:"🔪", label:"Corte", value:detail.corte},
-                        detail.origem&&{icon:detail.origem==="do sol"?"☀️":"🌿", label:"Origem", value:detail.origem==="do sol"?"Do Sol":"In Natura"},
                         {icon:"⚖️", label:"Peso total", value:fmtKg(detail.pesoTotal)},
                         {icon:"📦", label:"Nº de pacotes", value:`${(detail.pacotes||[]).filter(p=>p.status!=="consumido").length||detail.quantidadePecas||1} pacote${((detail.pacotes||[]).filter(p=>p.status!=="consumido").length||detail.quantidadePecas||1)!==1?"s":""}`},
                       ].filter(Boolean).map((row,i)=>(
@@ -568,6 +568,47 @@ function Estoque({meats,setTab,onTransfer}) {
                           <div style={{fontWeight:600,fontSize:14,color:C.text}}>{row.value}</div>
                         </div>
                       ))}
+                    </div>
+
+                    {/* Origem — editável */}
+                    <div style={{marginTop:8,background:C.light,borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editingOrigem?10:0}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:3}}>
+                            {detail.origem==="do sol"?"☀️":detail.origem==="temperado"?"🌶️":"🌿"} Origem
+                          </div>
+                          {!editingOrigem&&(
+                            <div style={{fontWeight:600,fontSize:14,color:C.text}}>
+                              {detail.origem==="do sol"?"Do Sol":detail.origem==="temperado"?"Temperado":detail.origem==="in natura"?"In Natura":"Não definida"}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={()=>setEditingOrigem(e=>!e)}
+                          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
+                            padding:"3px 9px",cursor:"pointer",fontSize:11,color:C.muted}}>
+                          {editingOrigem?"✕ Fechar":"✏️ Editar"}
+                        </button>
+                      </div>
+                      {editingOrigem&&(
+                        <div style={{display:"flex",gap:8}}>
+                          {[
+                            {val:"in natura", label:"🌿 In Natura", color:C.success},
+                            {val:"do sol",    label:"☀️ Do Sol",    color:C.warning},
+                            {val:"temperado", label:"🌶️ Temperado", color:"#FF7043"},
+                          ].map(o=>(
+                            <button key={o.val}
+                              onClick={()=>{ onUpdate(detail.id,{origem:o.val}); setEditingOrigem(false); }}
+                              style={{flex:1,padding:"9px 4px",borderRadius:8,cursor:"pointer",
+                                fontSize:11,fontWeight:700,
+                                background:detail.origem===o.val?o.color+"22":C.bg,
+                                border:`2px solid ${detail.origem===o.val?o.color:C.border}`,
+                                color:detail.origem===o.val?o.color:C.muted}}>
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     </div>
 
                     {/* Pacotes individuais com peso de cada um */}
@@ -781,6 +822,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
           <div style={{display:"flex",gap:8}}>
             <OrigBtn val="in natura" label="🌿 In Natura"/>
             <OrigBtn val="do sol"    label="☀️ Do Sol"/>
+            <OrigBtn val="temperado" label="🌶️ Temperado"/>
           </div>
         </FWrap>
 
@@ -1559,6 +1601,7 @@ export default function App() {
     }:m));
   };
   const transferMeat = (id, novoLocal) => setMeats(p=>p.map(m=>m.id===id?{...m,local:novoLocal,feitorPor:currentUser}:m));
+  const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
   const registerExit= (ex)  => {
     const m = meats.find(x=>x.id===ex.carneId);
     if(!m) return;
@@ -1738,7 +1781,7 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
         {tab==="saida"      &&<Saida       meats={active} onRegister={registerExit} setTab={setTab}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog}/>}
