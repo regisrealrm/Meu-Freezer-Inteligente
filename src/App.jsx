@@ -172,8 +172,21 @@ function Dashboard({meats,exits,alerts}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
-  const [openOrigem,setOpenOrigem]= useState(null); // "in natura"|"do sol"|"temperada"|null
-  const toggle = k => { setOpen(p=>p===k?null:k); setLocalFlt("todos"); };
+  const [openOrigem,setOpenOrigem]= useState(null);
+
+  // Ao abrir qualquer painel, fecha todos os outros
+  const toggle = k => {
+    setOpen(p=>p===k?null:k);
+    setOpenUtil(null); setOpenOrigem(null); setLocalFlt("todos");
+  };
+  const toggleUtil = u => {
+    setOpenUtil(p=>p===u?null:u);
+    setOpen(null); setOpenOrigem(null);
+  };
+  const toggleOrigem = o => {
+    setOpenOrigem(p=>p===o?null:o);
+    setOpen(null); setOpenUtil(null);
+  };
 
   const totalKg    = meats.reduce((s,m)=>s+m.pesoTotal,0);
   const valorAtual = meats.reduce((s,m)=>s+(m.precoPago||0),0);
@@ -232,7 +245,7 @@ function Dashboard({meats,exits,alerts}) {
         <>
           <div style={{display:"flex",gap:8,marginBottom:openOrigem?8:12,flexWrap:"wrap"}}>
             {kgNat>0&&(
-              <div onClick={()=>setOpenOrigem(o=>o==="in natura"?null:"in natura")}
+              <div onClick={()=>toggleOrigem("in natura")}
                 style={{flex:"1 1 80px",background:openOrigem==="in natura"?C.success+"18":C.card,
                   border:`1px solid ${openOrigem==="in natura"?C.success:C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
@@ -243,7 +256,7 @@ function Dashboard({meats,exits,alerts}) {
               </div>
             )}
             {kgSol>0&&(
-              <div onClick={()=>setOpenOrigem(o=>o==="do sol"?null:"do sol")}
+              <div onClick={()=>toggleOrigem("do sol")}
                 style={{flex:"1 1 80px",background:openOrigem==="do sol"?C.warning+"18":C.card,
                   border:`1px solid ${openOrigem==="do sol"?C.warning:C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
@@ -254,7 +267,7 @@ function Dashboard({meats,exits,alerts}) {
               </div>
             )}
             {kgTemp>0&&(
-              <div onClick={()=>setOpenOrigem(o=>o==="temperada"?null:"temperada")}
+              <div onClick={()=>toggleOrigem("temperada")}
                 style={{flex:"1 1 80px",background:openOrigem==="temperada"?"#FF704318":C.card,
                   border:`1px solid ${openOrigem==="temperada"?"#FF7043":C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
@@ -316,7 +329,7 @@ function Dashboard({meats,exits,alerts}) {
         <>
           <div style={{display:"flex",gap:8,marginBottom:openUtil?8:12}}>
             {kgChurrasco>0&&(
-              <div onClick={()=>setOpenUtil(u=>u==="churrasco"?null:"churrasco")}
+              <div onClick={()=>toggleUtil("churrasco")}
                 style={{flex:1,background:openUtil==="churrasco"?C.primary+"18":C.card,
                   border:`1px solid ${openUtil==="churrasco"?C.primary:C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
@@ -327,7 +340,7 @@ function Dashboard({meats,exits,alerts}) {
               </div>
             )}
             {kgConsumo>0&&(
-              <div onClick={()=>setOpenUtil(u=>u==="consumo"?null:"consumo")}
+              <div onClick={()=>toggleUtil("consumo")}
                 style={{flex:1,background:openUtil==="consumo"?C.success+"18":C.card,
                   border:`1px solid ${openUtil==="consumo"?C.success:C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
@@ -385,64 +398,49 @@ function Dashboard({meats,exits,alerts}) {
       {/* ── Expandable panels ────────────────────────── */}
       {open==="estoque"&&(
         <Card style={{borderTop:`3px solid ${C.primary}`}}>
-
-          {/* Location sub-filter pills */}
-          <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:14,paddingBottom:2}}>
-            {[{label:"Total",value:"todos",kg:totalKg},...locaisAtivos.map(l=>({label:l,value:l,kg:kgByLocal(l)}))].map(p=>{
-              const act = localFlt===p.value;
-              return (
-                <button key={p.value} onClick={e=>{e.stopPropagation();setLocalFlt(p.value);}}
-                  style={{background:act?C.primary:C.light,color:act?"#fff":C.muted,
-                    border:`1px solid ${act?C.primary:C.border}`,borderRadius:16,
-                    padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600,
-                    whiteSpace:"nowrap",flexShrink:0}}>
-                  {p.label}
-                  <span style={{marginLeft:5,opacity:0.75,fontSize:11}}>{fmtKg(p.kg)}</span>
-                </button>
-              );
-            })}
+          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:C.primary}}>
+            🧊 Estoque total por tipo
           </div>
-
-          {/* Summary row when a specific local is selected */}
-          {localFlt!=="todos"&&(
-            <div style={{background:C.light,borderRadius:8,padding:"8px 12px",marginBottom:10,
-              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:13,color:C.muted}}>📍 {localFlt}</span>
-              <span style={{fontWeight:800,color:C.primary,fontSize:15}}>{fmtKg(kgByLocal(localFlt))}</span>
-            </div>
-          )}
-
-          {/* Meat list */}
           {meats.length===0&&<div style={{color:C.muted,textAlign:"center"}}>Nenhuma carne cadastrada.</div>}
-          {[...meats]
-            .filter(m=>localFlt==="todos"||m.local===localFlt)
-            .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada))
-            .map(m=>{
-              const al=getAlert(m); const ai=ALERT[al];
-              const dis=diffDays(m.dataEntrada,TODAY);
-              return (
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                  padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      <span style={{fontWeight:600}}>{m.corte||m.tipo}</span>
-                      <span style={{fontSize:11,color:C.muted,background:C.light,padding:"1px 6px",borderRadius:4}}>{m.tipo}</span>
-                      {al!=="ok"&&<Badge label={ai.label} color={ai.color}/>}
-                    </div>
-                    <div style={{fontSize:11,color:C.muted,marginTop:2}}>
-                      {localFlt==="todos"&&<>📍 {m.local} · </>}{dis}d no estoque
-                    </div>
+          {TIPOS.map(t=>{
+            const itens = meats.filter(m=>m.tipo===t);
+            const kg    = itens.reduce((s,m)=>s+m.pesoTotal,0);
+            if(kg===0) return null;
+            const pct   = totalKg>0?(kg/totalKg)*100:0;
+            const accent= TIPO_COLORS[t]||C.muted;
+            return (
+              <div key={t} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:14,fontWeight:700,textTransform:"capitalize",color:C.text}}>{t}</span>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{fontSize:14,fontWeight:800,color:accent}}>{fmtKg(kg)}</span>
+                    <span style={{fontSize:11,color:C.muted}}> · {itens.length} item{itens.length!==1?"s":""}</span>
                   </div>
-                  <div style={{fontWeight:800,color:TIPO_COLORS[m.tipo]||C.primary,flexShrink:0}}>{fmtKg(m.pesoTotal)}</div>
                 </div>
-              );
-            })
-          }
-
-          {/* Total footer */}
-          <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",fontWeight:700,fontSize:14}}>
-            <span style={{color:C.muted}}>{localFlt==="todos"?"Total geral":localFlt}</span>
-            <span style={{color:C.primary}}>{fmtKg(localFlt==="todos"?totalKg:kgByLocal(localFlt))}</span>
+                <div style={{background:C.border,borderRadius:4,height:6,overflow:"hidden",marginBottom:6}}>
+                  <div style={{width:`${pct}%`,height:"100%",background:accent,transition:"width 0.4s"}}/>
+                </div>
+                {itens.map(m=>(
+                  <div key={m.id} style={{display:"flex",justifyContent:"space-between",
+                    fontSize:12,color:C.muted,padding:"4px 8px",
+                    borderBottom:`1px solid ${C.border+"80"}`}}>
+                    <div>
+                      <span style={{color:C.text,fontWeight:600}}>{m.corte||m.tipo}</span>
+                      <span style={{fontSize:10,marginLeft:6}}>📍 {m.local}</span>
+                      {m.origem&&<span style={{fontSize:10,marginLeft:6,color:m.origem==="do sol"?C.warning:m.origem==="temperada"?"#FF7043":C.success}}>
+                        {m.origem==="do sol"?"☀️":m.origem==="temperada"?"🌶️":"🌿"}
+                      </span>}
+                    </div>
+                    <strong style={{color:accent}}>{fmtKg(m.pesoTotal)}</strong>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",
+            fontWeight:800,fontSize:15,borderTop:`1px solid ${C.border}`}}>
+            <span style={{color:C.muted}}>Total geral</span>
+            <span style={{color:C.primary}}>{fmtKg(totalKg)}</span>
           </div>
         </Card>
       )}
@@ -535,8 +533,11 @@ function Dashboard({meats,exits,alerts}) {
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
 function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
-  const [flocal,       setFlocal]       = useState("todos");
-  const [futilidade,   setFutilidade]   = useState("todos");
+  const [flocal,     setFlocal]     = useState("todos");
+  const [futilidade, setFutilidade] = useState("todos");
+  const [forigem,    setForigem]    = useState("todos");
+  const [ftipo,      setFtipo]      = useState("todos");
+  const [fcorte,     setFcorte]     = useState("");
   const [selected,     setSelected]     = useState(null);
   const [showXfer,     setShowXfer]     = useState(false);
   const [transferOk,   setTransferOk]   = useState("");
@@ -549,13 +550,17 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
   const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [precoForm,       setPrecoForm]       = useState({});
 
-  // Count per location for pills
   const countBy     = loc  => meats.filter(m=>m.local===loc).length;
   const countByUtil = util => meats.filter(m=>m.utilidade===util).length;
+  const hasFilter   = flocal!=="todos"||futilidade!=="todos"||forigem!=="todos"||ftipo!=="todos"||fcorte;
+  const clearAll    = () => { setFlocal("todos");setFutilidade("todos");setForigem("todos");setFtipo("todos");setFcorte(""); };
 
   const filtered = meats
-    .filter(m=>flocal==="todos"||m.local===flocal)
-    .filter(m=>futilidade==="todos"||m.utilidade===futilidade)
+    .filter(m=>flocal==="todos"     ||m.local===flocal)
+    .filter(m=>futilidade==="todos" ||m.utilidade===futilidade)
+    .filter(m=>forigem==="todos"    ||m.origem===forigem)
+    .filter(m=>ftipo==="todos"      ||m.tipo===ftipo)
+    .filter(m=>!fcorte              ||(m.corte||m.tipo).toLowerCase().includes(fcorte.toLowerCase()))
     .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
 
   const detail = meats.find(m=>m.id===selected);
@@ -603,37 +608,69 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
       <SecTitle icon="📦" children="Estoque"
         action={<Btn small onClick={()=>setTab("entrada")}>+ Nova entrada</Btn>}/>
 
-      {/* ── Location pills ───────────────────────────── */}
-      <div style={{display:"flex",gap:8,overflowX:"auto",marginBottom:8,paddingBottom:4}}>
-        <LocPill label="Todos locais" value="todos" count={meats.length}/>
-        {LOCAIS.filter(l=>countBy(l)>0).map(l=>(
-          <LocPill key={l} label={l} value={l} count={countBy(l)}/>
-        ))}
-      </div>
-
-      {/* ── Utilidade pills ──────────────────────────── */}
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
-        {[
-          {val:"todos",     label:"Tudo",        color:C.primary},
-          {val:"churrasco", label:"🔥 Churrasco", color:C.primary},
-          {val:"consumo",   label:"🍽️ Consumo",   color:C.success},
-        ].map(u=>(
-          <button key={u.val} onClick={()=>setFutilidade(u.val)}
-            style={{background:futilidade===u.val?u.color+"22":C.card,
-              color:futilidade===u.val?u.color:C.muted,
-              border:`1px solid ${futilidade===u.val?u.color:C.border}`,
-              borderRadius:20,padding:"6px 14px",cursor:"pointer",
-              fontSize:12,fontWeight:600,whiteSpace:"nowrap",flexShrink:0,
-              display:"flex",gap:6,alignItems:"center"}}>
-            {u.label}
-            {u.val!=="todos"&&(
-              <span style={{background:futilidade===u.val?u.color+"33":C.light,
-                borderRadius:10,padding:"1px 6px",fontSize:11,fontWeight:700}}>
-                {countByUtil(u.val)}
-              </span>
-            )}
-          </button>
-        ))}
+      {/* ── Filtros ──────────────────────────────────── */}
+      <div style={{marginBottom:14}}>
+        {/* Armazenamento */}
+        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
+          <LocPill label="Todos locais" value="todos" count={meats.length}/>
+          {LOCAIS.filter(l=>countBy(l)>0).map(l=>(
+            <LocPill key={l} label={l} value={l} count={countBy(l)}/>
+          ))}
+        </div>
+        {/* Tipo */}
+        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
+          {[{val:"todos",label:"Todos tipos"},...TIPOS.filter(t=>meats.some(m=>m.tipo===t)).map(t=>({val:t,label:t}))].map(t=>(
+            <button key={t.val} onClick={()=>setFtipo(t.val)}
+              style={{background:ftipo===t.val?C.info+"22":C.card,color:ftipo===t.val?C.info:C.muted,
+                border:`1px solid ${ftipo===t.val?C.info:C.border}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
+                whiteSpace:"nowrap",flexShrink:0,textTransform:"capitalize"}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {/* Origem */}
+        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
+          {[{val:"todos",label:"Todas origens"},{val:"in natura",label:"🌿 In Natura"},{val:"do sol",label:"☀️ Do Sol"},{val:"temperada",label:"🌶️ Temperada"}].map(o=>(
+            <button key={o.val} onClick={()=>setForigem(o.val)}
+              style={{background:forigem===o.val?C.success+"22":C.card,color:forigem===o.val?C.success:C.muted,
+                border:`1px solid ${forigem===o.val?C.success:C.border}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {/* Utilidade */}
+        <div style={{display:"flex",gap:6,marginBottom:6}}>
+          {[{val:"todos",label:"Tudo"},{val:"churrasco",label:"🔥 Churrasco"},{val:"consumo",label:"🍽️ Consumo"}].map(u=>(
+            <button key={u.val} onClick={()=>setFutilidade(u.val)}
+              style={{background:futilidade===u.val?C.primary+"22":C.card,color:futilidade===u.val?C.primary:C.muted,
+                border:`1px solid ${futilidade===u.val?C.primary:C.border}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
+                display:"flex",gap:5,alignItems:"center"}}>
+              {u.label}
+              {u.val!=="todos"&&<span style={{background:futilidade===u.val?C.primary+"33":C.light,borderRadius:8,padding:"0 5px",fontSize:10}}>{countByUtil(u.val)}</span>}
+            </button>
+          ))}
+        </div>
+        {/* Busca por corte + limpar */}
+        <div style={{display:"flex",gap:8}}>
+          <input style={{...inputBase,flex:1,padding:"8px 12px",fontSize:13}}
+            placeholder="🔍 Buscar por corte..."
+            value={fcorte} onChange={e=>setFcorte(e.target.value)}/>
+          {hasFilter&&(
+            <button onClick={clearAll}
+              style={{background:C.danger+"22",border:`1px solid ${C.danger}55`,borderRadius:8,
+                padding:"8px 12px",cursor:"pointer",color:C.danger,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
+              ✕ Limpar
+            </button>
+          )}
+        </div>
+        {hasFilter&&(
+          <div style={{fontSize:11,color:C.muted,marginTop:4}}>
+            {filtered.length} item{filtered.length!==1?"s":""} encontrado{filtered.length!==1?"s":""}
+          </div>
+        )}
       </div>
 
       {/* ── Meat list ───────────────────────────────── */}
@@ -1386,14 +1423,23 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
 
 // ─── SAÍDA ────────────────────────────────────────────────────────────────────
 function Saida({meats,onRegister,setTab}) {
-  const [filterUtil,  setFilterUtil]  = useState("todos");
-  const [filterLocal, setFilterLocal] = useState("todos");
+  const [filterUtil,   setFilterUtil]   = useState("todos");
+  const [filterLocal,  setFilterLocal]  = useState("todos");
+  const [filterOrigem, setFilterOrigem] = useState("todos");
+  const [filterTipo,   setFilterTipo]   = useState("todos");
+  const [filterCorte,  setFilterCorte]  = useState("");
   const avail = [...meats]
     .filter(m=>m.pesoTotal>0)
-    .filter(m=>filterUtil==="todos"||m.utilidade===filterUtil)
-    .filter(m=>filterLocal==="todos"||m.local===filterLocal)
+    .filter(m=>filterUtil==="todos"   ||m.utilidade===filterUtil)
+    .filter(m=>filterLocal==="todos"  ||m.local===filterLocal)
+    .filter(m=>filterOrigem==="todos" ||m.origem===filterOrigem)
+    .filter(m=>filterTipo==="todos"   ||m.tipo===filterTipo)
+    .filter(m=>!filterCorte           ||(m.corte||m.tipo).toLowerCase().includes(filterCorte.toLowerCase()))
     .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
-  const [sel,      setSel]      = useState("");
+  const locaisComItem = LOCAIS.filter(l=>meats.some(m=>m.pesoTotal>0&&m.local===l));
+  const tiposComItem  = TIPOS.filter(t=>meats.some(m=>m.pesoTotal>0&&m.tipo===t));
+  const hasFilter = filterUtil!=="todos"||filterLocal!=="todos"||filterOrigem!=="todos"||filterTipo!=="todos"||filterCorte;
+  const clearFilters = ()=>{setFilterUtil("todos");setFilterLocal("todos");setFilterOrigem("todos");setFilterTipo("todos");setFilterCorte("");setSel("");};
   const [selPacote,setSelPacote]= useState(null);
   const [form,     setForm]     = useState({pesoRetirado:"",dataSaida:TODAY,motivo:"churrasco",localDestino:"",eventoVinculado:"",observacao:""});
   const [ok,       setOk]       = useState(false);
@@ -1451,41 +1497,67 @@ function Saida({meats,onRegister,setTab}) {
         </Card>
       )}
       <Card>
-        {/* Filtros: utilidade + local */}
+        {/* ── Filtros completos ── */}
         <div style={{marginBottom:12}}>
-          <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}>
-            {[
-              {val:"todos",     label:"Tudo"},
-              {val:"churrasco", label:"🔥 Churrasco"},
-              {val:"consumo",   label:"🍽️ Consumo"},
-            ].map(u=>(
+          {/* Armazenamento */}
+          <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
+            {["todos",...locaisComItem].map(l=>(
+              <button key={l} onClick={()=>{setFilterLocal(l);setSel("");}}
+                style={{background:filterLocal===l?C.info+"22":C.card,color:filterLocal===l?C.info:C.muted,
+                  border:`1px solid ${filterLocal===l?C.info:C.border}`,borderRadius:20,
+                  padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+                {l==="todos"?"📍 Todos locais":l}
+              </button>
+            ))}
+          </div>
+          {/* Tipo */}
+          <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
+            {["todos",...tiposComItem].map(t=>(
+              <button key={t} onClick={()=>{setFilterTipo(t);setSel("");}}
+                style={{background:filterTipo===t?C.warning+"22":C.card,color:filterTipo===t?C.warning:C.muted,
+                  border:`1px solid ${filterTipo===t?C.warning:C.border}`,borderRadius:20,
+                  padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
+                  whiteSpace:"nowrap",flexShrink:0,textTransform:"capitalize"}}>
+                {t==="todos"?"Todos tipos":t}
+              </button>
+            ))}
+          </div>
+          {/* Origem */}
+          <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
+            {[{val:"todos",label:"Todas origens"},{val:"in natura",label:"🌿 In Natura"},{val:"do sol",label:"☀️ Do Sol"},{val:"temperada",label:"🌶️ Temperada"}].map(o=>(
+              <button key={o.val} onClick={()=>{setFilterOrigem(o.val);setSel("");}}
+                style={{background:filterOrigem===o.val?C.success+"22":C.card,color:filterOrigem===o.val?C.success:C.muted,
+                  border:`1px solid ${filterOrigem===o.val?C.success:C.border}`,borderRadius:20,
+                  padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {/* Utilidade */}
+          <div style={{display:"flex",gap:6,marginBottom:6}}>
+            {[{val:"todos",label:"Tudo"},{val:"churrasco",label:"🔥 Churrasco"},{val:"consumo",label:"🍽️ Consumo"}].map(u=>(
               <button key={u.val} onClick={()=>{setFilterUtil(u.val);setSel("");}}
-                style={{background:filterUtil===u.val?C.primary+"22":C.light,
-                  color:filterUtil===u.val?C.primary:C.muted,
-                  border:`1px solid ${filterUtil===u.val?C.primary:C.border}`,
-                  borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
+                style={{background:filterUtil===u.val?C.primary+"22":C.card,color:filterUtil===u.val?C.primary:C.muted,
+                  border:`1px solid ${filterUtil===u.val?C.primary:C.border}`,borderRadius:20,
+                  padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>
                 {u.label}
               </button>
             ))}
           </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <button onClick={()=>{setFilterLocal("todos");setSel("");}}
-              style={{background:filterLocal==="todos"?C.info+"22":C.light,
-                color:filterLocal==="todos"?C.info:C.muted,
-                border:`1px solid ${filterLocal==="todos"?C.info:C.border}`,
-                borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
-              📍 Todos locais
-            </button>
-            {locaisComItem.map(l=>(
-              <button key={l} onClick={()=>{setFilterLocal(l);setSel("");}}
-                style={{background:filterLocal===l?C.info+"22":C.light,
-                  color:filterLocal===l?C.info:C.muted,
-                  border:`1px solid ${filterLocal===l?C.info:C.border}`,
-                  borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:600}}>
-                {l}
+          {/* Busca por corte + limpar */}
+          <div style={{display:"flex",gap:8}}>
+            <input style={{...inputBase,flex:1,padding:"8px 12px",fontSize:13}}
+              placeholder="🔍 Buscar por corte..."
+              value={filterCorte} onChange={e=>{setFilterCorte(e.target.value);setSel("");}}/>
+            {hasFilter&&(
+              <button onClick={clearFilters}
+                style={{background:C.danger+"22",border:`1px solid ${C.danger}55`,borderRadius:8,
+                  padding:"8px 10px",cursor:"pointer",color:C.danger,fontSize:12,fontWeight:700}}>
+                ✕
               </button>
-            ))}
+            )}
           </div>
+          {hasFilter&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>{avail.length} item{avail.length!==1?"s":""} encontrado{avail.length!==1?"s":""}</div>}
         </div>
 
         {/* Selecionar carne */}
@@ -2073,41 +2145,76 @@ export default function App() {
   };
 
   const addMeat = (meat) => {
-    // Cria pacotes individuais
-    const pesosArray = meat.pacotesPesos?.length
-      ? meat.pacotesPesos
-      : Array(meat.quantidadePecas||1).fill(meat.pesoTotal/(meat.quantidadePecas||1));
-    const pacotes   = pesosArray.map(p=>makePacote(parseFloat(p)||0));
-    const pesoTotal = pacotes.reduce((s,p)=>s+p.peso,0);
-    const newMeat   = {
-      ...meat, id:uid(), pesoInicial:pesoTotal, pesoTotal,
-      quantidadePecas:pacotes.length, pacotes,
-      status:"disponível", feitorPor:currentUser,
-      pacotesPesos:undefined,
+    // ── Calcula pesos dos pacotes de forma explícita e limpa
+    const pesos = (meat.pacotesPesos?.length > 0)
+      ? meat.pacotesPesos.map(p => Math.round(parseFloat(p) * 1000) / 1000)
+      : [Math.round(parseFloat(meat.pesoTotal) * 1000) / 1000];
+
+    const validPesos = pesos.filter(p => p > 0);
+    if(validPesos.length === 0) { alert("Peso inválido."); return; }
+
+    const pacotes = validPesos.map(peso => ({
+      id: uid(), peso, pesoAtual: peso, status: "disponível"
+    }));
+
+    const pesoTotal = Math.round(validPesos.reduce((s,p)=>s+p, 0) * 1000) / 1000;
+    const precoPago = parseFloat(meat.precoPago) > 0 ? parseFloat(meat.precoPago) : null;
+    const precoKg   = precoPago && pesoTotal > 0
+      ? Math.round((precoPago / pesoTotal) * 100) / 100
+      : parseFloat(meat.precoKg) > 0 ? parseFloat(meat.precoKg) : null;
+
+    // ── Objeto limpo — sem spread que pode contaminar
+    const newMeat = {
+      id:              uid(),
+      tipo:            meat.tipo             || "bovina",
+      corte:           meat.corte            || "",
+      origem:          meat.origem           || "",
+      utilidade:       meat.utilidade        || "",
+      dataEntrada:     meat.dataEntrada      || TODAY,
+      local:           meat.local            || "Freezer 1",
+      observacao:      meat.observacao       || "",
+      status:          "disponível",
+      feitorPor:       currentUser           || "",
+      pesoTotal,
+      pesoInicial:     pesoTotal,
+      quantidadePecas: pacotes.length,
+      pacotes,
+      precoPago,
+      precoKg,
     };
-    setMeats(p=>[...p, newMeat]);
-    const nome=(meat.corte||meat.tipo).trim();
-    const key =`${meat.tipo}:${nome.toLowerCase()}`;
-    setCatalog(p=>p.some(c=>c.key===key)?p:[...p,{id:uid(),nome,tipo:meat.tipo,key}]);
+
+    setMeats(p => [...p, newMeat]);
+
+    const nome = (meat.corte || meat.tipo).trim();
+    const key  = `${meat.tipo}:${nome.toLowerCase()}`;
+    setCatalog(p => p.some(c=>c.key===key) ? p : [...p, {id:uid(), nome, tipo:meat.tipo, key}]);
   };
 
   const addToExisting = (id, pesoAdd, qtdAdd, precoAdd, pacotesPesos) => {
-    const n = qtdAdd||1;
-    // Usa pesos individuais se fornecidos, senão distribui igualmente
-    const pesos = pacotesPesos?.length
-      ? pacotesPesos
-      : Array(n).fill(parseFloat((pesoAdd/n).toFixed(3)));
-    const newPacotes = pesos.map(p=>makePacote(parseFloat(p)||0));
-    const totalAdd   = pesos.reduce((s,p)=>s+(parseFloat(p)||0),0);
-    setMeats(p=>p.map(m=>m.id===id?{
-      ...m,
-      pesoTotal:    parseFloat((getPesoTotal(m)+totalAdd).toFixed(3)),
-      pesoInicial:  parseFloat(((m.pesoInicial||m.pesoTotal)+totalAdd).toFixed(3)),
-      quantidadePecas:(m.quantidadePecas||1)+n,
-      pacotes:[...(m.pacotes||[makePacote(m.pesoTotal)]),...newPacotes],
-      precoPago:precoAdd?parseFloat(((m.precoPago||0)+precoAdd).toFixed(2)):m.precoPago,
-      status:m.status==="consumido"?"disponível":m.status,
-    }:m));
+    const pesos = (pacotesPesos?.length > 0)
+      ? pacotesPesos.map(p => Math.round(parseFloat(p) * 1000) / 1000).filter(p=>p>0)
+      : Array(Math.max(1, qtdAdd||1)).fill(
+          Math.round((parseFloat(pesoAdd) / Math.max(1, qtdAdd||1)) * 1000) / 1000
+        );
+
+    const newPacotes = pesos.map(peso => ({id:uid(), peso, pesoAtual:peso, status:"disponível"}));
+    const totalAdd   = Math.round(pesos.reduce((s,p)=>s+p, 0) * 1000) / 1000;
+
+    setMeats(p=>p.map(m=>{
+      if(m.id !== id) return m;
+      const existingPacotes = m.pacotes || [{id:m.id+"_0", peso:m.pesoTotal, pesoAtual:m.pesoTotal, status:m.status}];
+      const allPacotes = [...existingPacotes, ...newPacotes];
+      const novoTotal  = Math.round(allPacotes.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0) * 1000) / 1000;
+      return {
+        ...m,
+        pacotes:        allPacotes,
+        pesoTotal:      novoTotal,
+        pesoInicial:    Math.round(((m.pesoInicial||m.pesoTotal) + totalAdd) * 1000) / 1000,
+        quantidadePecas:(m.quantidadePecas||1) + pesos.length,
+        precoPago:      precoAdd ? Math.round(((m.precoPago||0) + parseFloat(precoAdd)) * 100) / 100 : m.precoPago,
+        status:         m.status === "consumido" ? "disponível" : m.status,
+      };
+    }));
   };
   const transferMeat = (id, novoLocal) => setMeats(p=>p.map(m=>m.id===id?{...m,local:novoLocal,feitorPor:currentUser}:m));
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
@@ -2139,20 +2246,21 @@ export default function App() {
     if(!m) return;
     if(ex.motivo==="transferência") {
       setMeats(p=>p.map(x=>x.id===ex.carneId?{...x,local:ex.localDestino}:x));
-      setExits(p=>[...p,{...ex,id:uid(),carneNome:m.corte||m.tipo,tipo:m.tipo,pesoRetirado:getPesoTotal(m),
-        feitorPor:currentUser,
+      setExits(p=>[...p,{...ex,id:uid(),carneNome:m.corte||m.tipo,tipo:m.tipo,
+        pesoRetirado:m.pesoTotal, feitorPor:currentUser,
         observacao:`${m.local} → ${ex.localDestino}${ex.observacao?` · ${ex.observacao}`:""}`}]);
     } else {
-      // Aplica saída nos pacotes individuais
-      const pacotesAtuais = m.pacotes||[makePacote(m.pesoTotal)];
-      const pacotesNovos  = applyExitToPacotes(pacotesAtuais, ex.pesoRetirado, ex.pacoteId);
-      const novoTotal     = parseFloat(pacotesNovos.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0).toFixed(3));
+      const pacotesAtuais = m.pacotes||[{id:m.id+"_0",peso:m.pesoTotal,pesoAtual:m.pesoTotal,status:m.status}];
+      const pacotesNovos  = applyExitToPacotes(pacotesAtuais, parseFloat(ex.pesoRetirado), ex.pacoteId);
+      const novoTotal     = Math.round(
+        pacotesNovos.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0) * 1000
+      ) / 1000;
       const novoStatus    = getStatusFromPacotes(pacotesNovos);
       const qtdAtiva      = pacotesNovos.filter(p=>p.status!=="consumido").length;
       const novoPreco     = m.precoKg && novoTotal>0
-        ? parseFloat((novoTotal*m.precoKg).toFixed(2))
+        ? Math.round(novoTotal * m.precoKg * 100) / 100
         : m.precoPago && m.pesoTotal>0
-          ? parseFloat(((novoTotal/m.pesoTotal)*m.precoPago).toFixed(2))
+          ? Math.round((novoTotal / m.pesoTotal) * m.precoPago * 100) / 100
           : null;
       setMeats(p=>p.map(x=>x.id===ex.carneId?{
         ...x, pacotes:pacotesNovos, pesoTotal:novoTotal,
