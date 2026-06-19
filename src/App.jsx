@@ -1465,9 +1465,6 @@ function Saida({meats,onRegister,setTab}) {
     if(p) setForm(f=>({...f,pesoRetirado:p.pesoAtual}));
   };
 
-  // Locais que têm itens disponíveis
-  const locaisComItem = LOCAIS.filter(l=>meats.some(m=>m.pesoTotal>0&&m.local===l));
-
   const submit = () => {
     if(!sel) return alert("Selecione uma carne.");
     if(isTransfer) {
