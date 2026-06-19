@@ -1439,8 +1439,9 @@ function Saida({meats,onRegister,setTab}) {
   const locaisComItem = LOCAIS.filter(l=>meats.some(m=>m.pesoTotal>0&&m.local===l));
   const tiposComItem  = TIPOS.filter(t=>meats.some(m=>m.pesoTotal>0&&m.tipo===t));
   const hasFilter = filterUtil!=="todos"||filterLocal!=="todos"||filterOrigem!=="todos"||filterTipo!=="todos"||filterCorte;
-  const clearFilters = ()=>{setFilterUtil("todos");setFilterLocal("todos");setFilterOrigem("todos");setFilterTipo("todos");setFilterCorte("");setSel("");};
+  const [sel,      setSel]      = useState("");
   const [selPacote,setSelPacote]= useState(null);
+  const clearFilters = ()=>{setFilterUtil("todos");setFilterLocal("todos");setFilterOrigem("todos");setFilterTipo("todos");setFilterCorte("");setSel("");};
   const [form,     setForm]     = useState({pesoRetirado:"",dataSaida:TODAY,motivo:"churrasco",localDestino:"",eventoVinculado:"",observacao:""});
   const [ok,       setOk]       = useState(false);
   const set = k=>e=>setForm(f=>({...f,[k]:e.target.value}));
