@@ -1089,23 +1089,51 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                           </button>
                         ) : (
                           <div style={{background:"#1A0A0A",border:`1px solid ${C.danger}44`,borderRadius:12,padding:14,marginBottom:8}}>
-                            <div style={{fontWeight:700,fontSize:14,color:C.danger,marginBottom:10}}>
-                              ➖ Registrar Saída
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                              <div style={{fontWeight:700,fontSize:14,color:C.danger}}>➖ Registrar Saída</div>
+                              <button onClick={()=>{
+                                const pacs=(detail.pacotes||[]).filter(p=>p.status!=="consumido");
+                                setSaidaForm(f=>({...f,pesos:Object.fromEntries(pacs.map(p=>[p.id,p.pesoAtual]))}));
+                              }}
+                                style={{background:C.danger+"22",border:`1px solid ${C.danger}55`,borderRadius:8,
+                                  padding:"5px 10px",cursor:"pointer",color:C.danger,fontSize:12,fontWeight:700}}>
+                                📦 Tudo
+                              </button>
                             </div>
+
                             {/* Peso por pacote */}
-                            {(detail.pacotes||[]).filter(p=>p.status!=="consumido").map((p,i)=>(
-                              <div key={p.id} style={{marginBottom:8}}>
-                                <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>
-                                  Pacote {i+1} · disponível: <strong style={{color:C.primary}}>{fmtKg(p.pesoAtual)}</strong>
+                            {(detail.pacotes||[]).filter(p=>p.status!=="consumido").map((p,i)=>{
+                              const isCompleto = parseFloat(saidaForm.pesos?.[p.id])===p.pesoAtual;
+                              return (
+                                <div key={p.id} style={{marginBottom:10,background:C.light,borderRadius:10,padding:"10px 12px"}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                    <span style={{fontSize:13,fontWeight:700,color:C.text}}>Pacote {i+1}</span>
+                                    <span style={{fontSize:12,color:C.primary,fontWeight:600}}>{fmtKg(p.pesoAtual)} disponível</span>
+                                  </div>
+                                  <div style={{display:"flex",gap:8}}>
+                                    {/* Botão completo */}
+                                    <button onClick={()=>setSaidaForm(f=>({
+                                      ...f, pesos:{...f.pesos, [p.id]: isCompleto?"":p.pesoAtual}
+                                    }))}
+                                      style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,cursor:"pointer",
+                                        fontSize:12,fontWeight:700,
+                                        background:isCompleto?C.danger+"33":C.bg,
+                                        border:`2px solid ${isCompleto?C.danger:C.border}`,
+                                        color:isCompleto?C.danger:C.muted}}>
+                                      {isCompleto?"✅ Completo":"📦 Completo"}
+                                    </button>
+                                    {/* Campo parcial */}
+                                    <input style={{...inputBase,flex:1,padding:"8px 10px",fontSize:13}}
+                                      type="number" step="0.1" min="0" max={p.pesoAtual}
+                                      placeholder="Parcial (kg)"
+                                      value={saidaForm.pesos?.[p.id]||""}
+                                      onFocus={e=>{e.target.select();setSaidaForm(f=>({...f,pesos:{...f.pesos,[p.id]:""}}));}}
+                                      onChange={e=>setSaidaForm(f=>({...f,pesos:{...f.pesos,[p.id]:e.target.value}}))}/>
+                                  </div>
                                 </div>
-                                <input style={{...inputBase,width:"100%",padding:"8px 12px"}}
-                                  type="number" step="0.1" min="0" max={p.pesoAtual}
-                                  placeholder={`Kg a retirar (máx ${p.pesoAtual})`}
-                                  value={saidaForm.pesos?.[p.id]||""}
-                                  onFocus={e=>e.target.select()}
-                                  onChange={e=>setSaidaForm(f=>({...f,pesos:{...f.pesos,[p.id]:e.target.value}}))}/>
-                              </div>
-                            ))}
+                              );
+                            })}
+
                             {/* Data */}
                             <div style={{marginBottom:8}}>
                               <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>📅 Data</div>
