@@ -532,7 +532,7 @@ function Dashboard({meats,exits,alerts}) {
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
+function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit}) {
   const [flocal,     setFlocal]     = useState("todos");
   const [futilidade, setFutilidade] = useState("todos");
   const [forigem,    setForigem]    = useState("todos");
@@ -540,6 +540,8 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
   const [fcorte,     setFcorte]     = useState("");
   const [selected,     setSelected]     = useState(null);
   const [showXfer,     setShowXfer]     = useState(false);
+  const [showSaida,    setShowSaida]    = useState(false);
+  const [saidaForm,    setSaidaForm]    = useState({});
   const [transferOk,   setTransferOk]   = useState("");
   const [editingOrigem,   setEditingOrigem]   = useState(false);
   const [editingPreco,    setEditingPreco]    = useState(false);
@@ -566,12 +568,12 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
   const detail = meats.find(m=>m.id===selected);
 
   const openDetail = (id) => {
-    setSelected(id); setShowXfer(false); setTransferOk("");
+    setSelected(id); setShowXfer(false); setTransferOk(""); setShowSaida(false); setSaidaForm({});
     setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
     setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
   const closeModal = () => {
-    setSelected(null); setShowXfer(false); setTransferOk("");
+    setSelected(null); setShowXfer(false); setTransferOk(""); setShowSaida(false); setSaidaForm({});
     setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
     setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
@@ -1069,6 +1071,96 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete}) {
                       </>
                     ) : (
                       <>
+                        {/* ── SAÍDA inline ── */}
+                        {!showSaida ? (
+                          <button onClick={()=>{
+                            const pacs=(detail.pacotes||[]).filter(p=>p.status!=="consumido");
+                            setSaidaForm({
+                              data:TODAY, motivo:"consumo",
+                              pesos:Object.fromEntries(pacs.map(p=>[p.id,""]))
+                            });
+                            setShowSaida(true);
+                          }}
+                            style={{width:"100%",background:C.danger+"22",border:`1px solid ${C.danger}55`,
+                              borderRadius:12,padding:"13px",cursor:"pointer",color:C.danger,
+                              fontSize:14,fontWeight:700,marginBottom:8,display:"flex",
+                              justifyContent:"center",alignItems:"center",gap:8}}>
+                            ➖ Registrar Saída
+                          </button>
+                        ) : (
+                          <div style={{background:"#1A0A0A",border:`1px solid ${C.danger}44`,borderRadius:12,padding:14,marginBottom:8}}>
+                            <div style={{fontWeight:700,fontSize:14,color:C.danger,marginBottom:10}}>
+                              ➖ Registrar Saída
+                            </div>
+                            {/* Peso por pacote */}
+                            {(detail.pacotes||[]).filter(p=>p.status!=="consumido").map((p,i)=>(
+                              <div key={p.id} style={{marginBottom:8}}>
+                                <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>
+                                  Pacote {i+1} · disponível: <strong style={{color:C.primary}}>{fmtKg(p.pesoAtual)}</strong>
+                                </div>
+                                <input style={{...inputBase,width:"100%",padding:"8px 12px"}}
+                                  type="number" step="0.1" min="0" max={p.pesoAtual}
+                                  placeholder={`Kg a retirar (máx ${p.pesoAtual})`}
+                                  value={saidaForm.pesos?.[p.id]||""}
+                                  onFocus={e=>e.target.select()}
+                                  onChange={e=>setSaidaForm(f=>({...f,pesos:{...f.pesos,[p.id]:e.target.value}}))}/>
+                              </div>
+                            ))}
+                            {/* Data */}
+                            <div style={{marginBottom:8}}>
+                              <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>📅 Data</div>
+                              <input style={{...inputBase,width:"100%",padding:"8px 12px"}}
+                                type="date" value={saidaForm.data||TODAY}
+                                onChange={e=>setSaidaForm(f=>({...f,data:e.target.value}))}/>
+                            </div>
+                            {/* Motivo */}
+                            <div style={{marginBottom:12}}>
+                              <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>🎯 Motivo</div>
+                              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                {["consumo","churrasco","descarte","doação"].map(m=>(
+                                  <button key={m} onClick={()=>setSaidaForm(f=>({...f,motivo:m}))}
+                                    style={{padding:"6px 12px",borderRadius:8,cursor:"pointer",fontSize:12,
+                                      fontWeight:600,textTransform:"capitalize",
+                                      background:saidaForm.motivo===m?C.primary+"22":C.light,
+                                      color:saidaForm.motivo===m?C.primary:C.muted,
+                                      border:`1px solid ${saidaForm.motivo===m?C.primary:C.border}`}}>
+                                    {m}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            {/* Buttons */}
+                            <div style={{display:"flex",gap:8}}>
+                              <button onClick={()=>{
+                                const pacs=(detail.pacotes||[]).filter(p=>p.status!=="consumido");
+                                const hasAny = pacs.some(p=>parseFloat(saidaForm.pesos?.[p.id])>0);
+                                if(!hasAny) return alert("Informe o peso a retirar de pelo menos um pacote.");
+                                // Apply exits per package
+                                const updatedPacotes = (detail.pacotes||[]).map(p=>{
+                                  const retirar = parseFloat(saidaForm.pesos?.[p.id])||0;
+                                  if(retirar<=0||p.status==="consumido") return p;
+                                  const novoAtual = Math.max(0, Math.round((p.pesoAtual-retirar)*1000)/1000);
+                                  return {...p, pesoAtual:novoAtual, status:novoAtual<=0.001?"consumido":"aberto"};
+                                });
+                                const novoTotal = Math.round(updatedPacotes.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+                                const totalRetirado = Math.round(pacs.reduce((s,p)=>s+(parseFloat(saidaForm.pesos?.[p.id])||0),0)*1000)/1000;
+                                onUpdate(detail.id,{pacotes:updatedPacotes,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"});
+                                onRegisterExit({id:detail.id,tipo:detail.tipo,corte:detail.corte,pesoRetirado:totalRetirado,dataSaida:saidaForm.data,motivo:saidaForm.motivo});
+                                setShowSaida(false); setSaidaForm({});
+                                if(novoTotal<=0) closeModal();
+                              }}
+                                style={{flex:2,background:C.danger,border:"none",borderRadius:8,
+                                  padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                                ✅ Confirmar saída
+                              </button>
+                              <button onClick={()=>{setShowSaida(false);setSaidaForm({});}}
+                                style={{flex:1,background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                                  padding:"11px",cursor:"pointer",color:C.muted,fontSize:13}}>
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         <button onClick={()=>setShowXfer(true)}
                           style={{width:"100%",background:C.info+"22",border:`1px solid ${C.info}55`,
                             borderRadius:12,padding:"14px",cursor:"pointer",color:C.info,
@@ -1411,7 +1503,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
             <FInput label="Observações" value={form.observacao} onChange={set("observacao")}
               placeholder="Temperada, fatiada, para churrasco..."/>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
-              <Btn onClick={submit}>✅ Cadastrar carne</Btn>
+              <Btn onClick={submit}>✅ Cadastrar item</Btn>
               <Btn onClick={()=>setTab("estoque")} color={C.dim}>← Voltar</Btn>
             </div>
           </>
@@ -1699,6 +1791,12 @@ function Churrasometro({meats, catalog}) {
     </button>
   );
 
+  // Só cortes cadastrados com utilidade "churrasco" no estoque
+  const churrascoCortes = (() => {
+    const keys = new Set(meats.filter(m=>m.utilidade==="churrasco").map(m=>`${m.tipo}:${(m.corte||m.tipo).trim().toLowerCase()}`));
+    return catalog.filter(c=>keys.has(c.key));
+  })();
+
   return (
     <div>
       <SecTitle icon="🔥" children="Churrascômetro"/>
@@ -1723,21 +1821,21 @@ function Churrasometro({meats, catalog}) {
         </div>
       </Card>
 
-      {/* Cut selection from catalog */}
+      {/* Seleção de cortes — só os cadastrados como churrasco */}
       <SecTitle icon="🥩"
         children={selKeys.length>0
           ?`Cortes selecionados (${selKeys.length})`
           :"Quais cortes vai servir?"}/>
 
-      {catalog.length===0 ? (
+      {churrascoCortes.length===0 ? (
         <Card style={{marginBottom:16}}>
           <div style={{color:C.muted,textAlign:"center",padding:8}}>
-            Nenhum corte cadastrado ainda. Adicione carnes na aba Entrada e eles aparecerão aqui automaticamente.
+            Nenhum corte cadastrado com utilidade "Churrasco". Vá em Estoque → edite a utilidade dos itens.
           </div>
         </Card>
       ) : (
         <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-          {catalog.map(entry=>{
+          {churrascoCortes.map(entry=>{
             const on     = selKeys.includes(entry.key);
             const accent = TIPO_COLORS[entry.tipo]||C.muted;
             const disp   = stockOf(entry);
@@ -2273,7 +2371,6 @@ export default function App() {
     {id:"dashboard", e:"🏠", l:"Painel"},
     {id:"estoque",   e:"📦", l:"Estoque"},
     {id:"entrada",   e:"➕", l:"Entrada"},
-    {id:"saida",     e:"➖", l:"Saída"},
     {id:"churras",   e:"🔥", l:"Churrasco"},
     {id:"relatorios",e:"📊", l:"Relatórios"},
   ];
@@ -2417,9 +2514,8 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
-        {tab==="saida"      &&<Saida       meats={active} onRegister={registerExit} setTab={setTab}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
       </div>
