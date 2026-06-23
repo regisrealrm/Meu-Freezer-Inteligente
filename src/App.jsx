@@ -534,15 +534,16 @@ function Dashboard({meats,exits,alerts}) {
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
 function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit}) {
   const [flocal,     setFlocal]     = useState("todos");
-  const [futilidade, setFutilidade] = useState("todos");
-  const [forigem,    setForigem]    = useState("todos");
-  const [ftipo,      setFtipo]      = useState("todos");
-  const [fcorte,     setFcorte]     = useState("");
-  const [selected,     setSelected]     = useState(null);
-  const [showXfer,     setShowXfer]     = useState(false);
-  const [showSaida,    setShowSaida]    = useState(false);
-  const [saidaForm,    setSaidaForm]    = useState({});
-  const [transferOk,   setTransferOk]   = useState("");
+  const [futilidade,  setFutilidade]  = useState("todos");
+  const [forigem,     setForigem]     = useState("todos");
+  const [ftipo,       setFtipo]       = useState("todos");
+  const [fcorte,      setFcorte]      = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [selected,    setSelected]    = useState(null);
+  const [showXfer,    setShowXfer]    = useState(false);
+  const [showSaida,   setShowSaida]   = useState(false);
+  const [saidaForm,   setSaidaForm]   = useState({});
+  const [transferOk,  setTransferOk]  = useState("");
   const [editingOrigem,   setEditingOrigem]   = useState(false);
   const [editingPreco,    setEditingPreco]    = useState(false);
   const [editingUtilidade,setEditingUtilidade]= useState(false);
@@ -610,70 +611,103 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
       <SecTitle icon="📦" children="Estoque"
         action={<Btn small onClick={()=>setTab("entrada")}>+ Nova entrada</Btn>}/>
 
-      {/* ── Filtros ──────────────────────────────────── */}
-      <div style={{marginBottom:14}}>
-        {/* Armazenamento */}
-        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
-          <LocPill label="Todos locais" value="todos" count={meats.length}/>
-          {LOCAIS.filter(l=>countBy(l)>0).map(l=>(
-            <LocPill key={l} label={l} value={l} count={countBy(l)}/>
-          ))}
-        </div>
-        {/* Tipo */}
-        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
-          {[{val:"todos",label:"Todos tipos"},...TIPOS.filter(t=>meats.some(m=>m.tipo===t)).map(t=>({val:t,label:t}))].map(t=>(
-            <button key={t.val} onClick={()=>setFtipo(t.val)}
-              style={{background:ftipo===t.val?C.info+"22":C.card,color:ftipo===t.val?C.info:C.muted,
-                border:`1px solid ${ftipo===t.val?C.info:C.border}`,borderRadius:20,
-                padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
-                whiteSpace:"nowrap",flexShrink:0,textTransform:"capitalize"}}>
-              {t.label}
+      {/* ── Filtros colapsáveis ──────────────────────── */}
+      {(()=>{
+        const activeCount = [flocal!=="todos",futilidade!=="todos",forigem!=="todos",ftipo!=="todos",!!fcorte].filter(Boolean).length;
+        // estilo padrão de pill — todos do mesmo tamanho
+        const pill = (active,color=C.primary) => ({
+          padding:"8px 0",minWidth:90,flex:"1 1 0",
+          borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600,
+          textAlign:"center",whiteSpace:"nowrap",overflow:"hidden",
+          textOverflow:"ellipsis",
+          background:active?color+"22":C.card,
+          color:active?color:C.muted,
+          border:`1px solid ${active?color:C.border}`,
+        });
+        return (
+          <>
+            {/* Botão toggle */}
+            <button onClick={()=>setShowFilters(f=>!f)}
+              style={{width:"100%",marginBottom:8,padding:"11px 16px",borderRadius:10,cursor:"pointer",
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                background:activeCount>0?C.primary+"18":C.card,
+                border:`1px solid ${activeCount>0?C.primary:C.border}`,
+                color:activeCount>0?C.primary:C.muted,fontWeight:600,fontSize:13}}>
+              <span>🔍 Filtros{activeCount>0?` (${activeCount} ativo${activeCount>1?"s":""})`:""}</span>
+              <span style={{fontSize:16}}>{showFilters?"▲":"▼"}</span>
             </button>
-          ))}
-        </div>
-        {/* Origem */}
-        <div style={{display:"flex",gap:6,overflowX:"auto",marginBottom:6,paddingBottom:2}}>
-          {[{val:"todos",label:"Todas origens"},{val:"in natura",label:"🌿 In Natura"},{val:"do sol",label:"☀️ Do Sol"},{val:"temperada",label:"🌶️ Temperada"}].map(o=>(
-            <button key={o.val} onClick={()=>setForigem(o.val)}
-              style={{background:forigem===o.val?C.success+"22":C.card,color:forigem===o.val?C.success:C.muted,
-                border:`1px solid ${forigem===o.val?C.success:C.border}`,borderRadius:20,
-                padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600,whiteSpace:"nowrap",flexShrink:0}}>
-              {o.label}
-            </button>
-          ))}
-        </div>
-        {/* Utilidade */}
-        <div style={{display:"flex",gap:6,marginBottom:6}}>
-          {[{val:"todos",label:"Tudo"},{val:"churrasco",label:"🔥 Churrasco"},{val:"consumo",label:"🍽️ Consumo"}].map(u=>(
-            <button key={u.val} onClick={()=>setFutilidade(u.val)}
-              style={{background:futilidade===u.val?C.primary+"22":C.card,color:futilidade===u.val?C.primary:C.muted,
-                border:`1px solid ${futilidade===u.val?C.primary:C.border}`,borderRadius:20,
-                padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
-                display:"flex",gap:5,alignItems:"center"}}>
-              {u.label}
-              {u.val!=="todos"&&<span style={{background:futilidade===u.val?C.primary+"33":C.light,borderRadius:8,padding:"0 5px",fontSize:10}}>{countByUtil(u.val)}</span>}
-            </button>
-          ))}
-        </div>
-        {/* Busca por corte + limpar */}
-        <div style={{display:"flex",gap:8}}>
-          <input style={{...inputBase,flex:1,padding:"8px 12px",fontSize:13}}
-            placeholder="🔍 Buscar por corte..."
-            value={fcorte} onChange={e=>setFcorte(e.target.value)}/>
-          {hasFilter&&(
-            <button onClick={clearAll}
-              style={{background:C.danger+"22",border:`1px solid ${C.danger}55`,borderRadius:8,
-                padding:"8px 12px",cursor:"pointer",color:C.danger,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
-              ✕ Limpar
-            </button>
-          )}
-        </div>
-        {hasFilter&&(
-          <div style={{fontSize:11,color:C.muted,marginTop:4}}>
-            {filtered.length} item{filtered.length!==1?"s":""} encontrado{filtered.length!==1?"s":""}
-          </div>
-        )}
-      </div>
+
+            {showFilters&&(
+              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,
+                padding:"12px",marginBottom:12}}>
+
+                {/* Local */}
+                <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>📍 LOCAL</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                  <button style={pill(flocal==="todos")} onClick={()=>setFlocal("todos")}>Todos</button>
+                  {LOCAIS.filter(l=>countBy(l)>0).map(l=>(
+                    <button key={l} style={pill(flocal===l)} onClick={()=>setFlocal(l)}>{l}</button>
+                  ))}
+                </div>
+
+                {/* Tipo */}
+                <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🥩 TIPO</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                  <button style={pill(ftipo==="todos",C.info)} onClick={()=>setFtipo("todos")}>Todos</button>
+                  {TIPOS.filter(t=>meats.some(m=>m.tipo===t)).map(t=>(
+                    <button key={t} style={{...pill(ftipo===t,C.info),textTransform:"capitalize"}} onClick={()=>setFtipo(t)}>{t}</button>
+                  ))}
+                </div>
+
+                {/* Origem */}
+                <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🌿 ORIGEM</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                  {[{v:"todos",l:"Todas"},{v:"in natura",l:"🌿 In Natura"},{v:"do sol",l:"☀️ Do Sol"},{v:"temperada",l:"🌶️ Temperada"}].map(o=>(
+                    <button key={o.v} style={pill(forigem===o.v,C.success)} onClick={()=>setForigem(o.v)}>{o.l}</button>
+                  ))}
+                </div>
+
+                {/* Utilidade */}
+                <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🎯 UTILIDADE</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                  {[{v:"todos",l:"Tudo"},{v:"churrasco",l:"🔥 Churrasco"},{v:"consumo",l:"🍽️ Consumo"}].map(u=>(
+                    <button key={u.v} style={pill(futilidade===u.v)} onClick={()=>setFutilidade(u.v)}>{u.l}</button>
+                  ))}
+                </div>
+
+                {/* Corte */}
+                <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🔪 CORTE</div>
+                <div style={{display:"flex",gap:8}}>
+                  <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
+                    placeholder="Buscar por corte..."
+                    value={fcorte} onChange={e=>setFcorte(e.target.value)}/>
+                  {fcorte&&(
+                    <button onClick={()=>setFcorte("")}
+                      style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                        padding:"9px 12px",cursor:"pointer",color:C.muted,fontSize:12}}>✕</button>
+                  )}
+                </div>
+
+                {/* Limpar tudo */}
+                {activeCount>0&&(
+                  <button onClick={clearAll}
+                    style={{width:"100%",marginTop:12,background:C.danger+"22",border:`1px solid ${C.danger}44`,
+                      borderRadius:8,padding:"9px",cursor:"pointer",color:C.danger,fontSize:12,fontWeight:700}}>
+                    ✕ Limpar todos os filtros
+                  </button>
+                )}
+              </div>
+            )}
+
+            {hasFilter&&!showFilters&&(
+              <div style={{fontSize:11,color:C.muted,marginBottom:8}}>
+                {filtered.length} item{filtered.length!==1?"s":""} encontrado{filtered.length!==1?"s":""}
+                {" · "}<span style={{color:C.primary,cursor:"pointer",fontWeight:600}} onClick={clearAll}>limpar</span>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* ── Meat list ───────────────────────────────── */}
       {filtered.length===0&&(
