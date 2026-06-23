@@ -579,7 +579,19 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
     setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
 
+  const [xferMode,    setXferMode]    = useState("tudo"); // "tudo"|"parcial"
+  const [xferPesos,   setXferPesos]   = useState({});
+
   const doTransfer = (novoLocal) => {
+    const m = meats.find(x=>x.id===selected);
+    if(!m) return;
+    // Registra no histórico
+    onRegisterExit({
+      id: selected, tipo: m.tipo, corte: m.corte,
+      pesoRetirado: m.pesoTotal,
+      dataSaida: TODAY, motivo: "transferência",
+      observacao: `${m.local} → ${novoLocal}`,
+    });
     onTransfer(selected, novoLocal);
     setTransferOk(novoLocal);
     setShowXfer(false);
@@ -1082,22 +1094,80 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                       </div>
                     ) : showXfer ? (
                       <>
-                        <div style={{fontSize:12,color:C.muted,marginBottom:10,fontWeight:600}}>
+                        <div style={{fontWeight:700,fontSize:14,color:C.info,marginBottom:10}}>
+                          🔄 Transferir para outro local
+                        </div>
+
+                        {/* Modo: tudo ou parcial */}
+                        <div style={{display:"flex",gap:8,marginBottom:12}}>
+                          {["tudo","parcial"].map(m=>(
+                            <button key={m} onClick={()=>setXferMode(m)}
+                              style={{flex:1,padding:"9px",borderRadius:8,cursor:"pointer",
+                                fontSize:13,fontWeight:700,
+                                background:xferMode===m?C.info+"22":C.light,
+                                border:`2px solid ${xferMode===m?C.info:C.border}`,
+                                color:xferMode===m?C.info:C.muted}}>
+                              {m==="tudo"?"📦 Tudo":"⚖️ Parcial (peso)"}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Se parcial, mostra campos por pacote */}
+                        {xferMode==="parcial"&&(
+                          <div style={{marginBottom:12}}>
+                            {(detail.pacotes||[]).filter(p=>p.status!=="consumido").map((p,i)=>{
+                              const isCompleto = parseFloat(xferPesos[p.id])===p.pesoAtual;
+                              return (
+                                <div key={p.id} style={{background:C.light,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                                    <span style={{fontSize:13,fontWeight:700}}>Pacote {i+1}</span>
+                                    <span style={{fontSize:12,color:C.primary}}>{fmtKg(p.pesoAtual)}</span>
+                                  </div>
+                                  <div style={{display:"flex",gap:8}}>
+                                    <button onClick={()=>setXferPesos(f=>({...f,[p.id]:isCompleto?"":p.pesoAtual}))}
+                                      style={{flex:"0 0 auto",padding:"8px 12px",borderRadius:8,cursor:"pointer",
+                                        fontSize:12,fontWeight:700,
+                                        background:isCompleto?C.info+"33":C.bg,
+                                        border:`2px solid ${isCompleto?C.info:C.border}`,
+                                        color:isCompleto?C.info:C.muted}}>
+                                      {isCompleto?"✅ Completo":"📦 Completo"}
+                                    </button>
+                                    <input style={{...inputBase,flex:1,padding:"8px 10px",fontSize:13}}
+                                      type="number" step="0.1" min="0" max={p.pesoAtual}
+                                      placeholder="Parcial (kg)"
+                                      value={xferPesos[p.id]||""}
+                                      onFocus={e=>{e.target.select();setXferPesos(f=>({...f,[p.id]:""}));}}
+                                      onChange={e=>setXferPesos(f=>({...f,[p.id]:e.target.value}))}/>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Destino */}
+                        <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:8}}>
                           Escolha o destino:
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:8}}>
                           {LOCAIS.filter(l=>l!==detail.local).map(l=>(
-                            <button key={l} onClick={()=>doTransfer(l)}
+                            <button key={l} onClick={()=>{
+                              if(xferMode==="parcial"){
+                                const hasAny=Object.values(xferPesos).some(v=>parseFloat(v)>0);
+                                if(!hasAny) return alert("Informe o peso a transferir de pelo menos um pacote.");
+                              }
+                              doTransfer(l);
+                            }}
                               style={{background:C.light,border:`1px solid ${C.border}`,
                                 borderRadius:12,padding:"14px 18px",cursor:"pointer",
                                 color:C.text,fontSize:15,fontWeight:700,textAlign:"left",
                                 display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                               <span>📍 {l}</span>
-                              <span style={{color:C.success,fontSize:20}}>→</span>
+                              <span style={{color:C.info,fontSize:20}}>→</span>
                             </button>
                           ))}
                         </div>
-                        <button onClick={()=>setShowXfer(false)}
+                        <button onClick={()=>{setShowXfer(false);setXferMode("tudo");setXferPesos({});}}
                           style={{marginTop:10,background:"none",border:"none",color:C.muted,
                             cursor:"pointer",fontSize:13,width:"100%",textAlign:"center"}}>
                           ← Cancelar
@@ -2172,10 +2242,156 @@ function Relatorios({meats,exits}) {
 const STORAGE_KEY  = "mfi3_data";
 const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.com/${DB_PATH}.json`;
 
+// ─── CONFIGURAÇÕES ────────────────────────────────────────────────────────────
+function Configuracoes({config, catalog, onUpdateConfig, onUpdateCatalog}) {
+  const [editingSection, setEditingSection] = useState(null);
+  const [newItem,        setNewItem]        = useState("");
+  const [editIdx,        setEditIdx]        = useState(null);
+  const [editVal,        setEditVal]        = useState("");
+
+  const sections = [
+    {key:"tipos",      title:"Tipos de carne",         icon:"🥩", color:C.primary},
+    {key:"locais",     title:"Locais de armazenamento", icon:"📍", color:C.info},
+    {key:"origens",    title:"Origens",                icon:"🌿", color:C.success},
+    {key:"utilidades", title:"Utilidades",             icon:"🎯", color:C.warning},
+  ];
+
+  const addItem = (key) => {
+    const val = newItem.trim();
+    if(!val) return;
+    if(config[key].includes(val)) return alert("Já existe.");
+    onUpdateConfig({...config, [key]:[...config[key], val]});
+    setNewItem("");
+  };
+
+  const deleteItem = (key, idx) => {
+    const updated = config[key].filter((_,i)=>i!==idx);
+    onUpdateConfig({...config, [key]:updated});
+  };
+
+  const saveEdit = (key) => {
+    const val = editVal.trim();
+    if(!val) return;
+    const updated = [...config[key]];
+    updated[editIdx] = val;
+    onUpdateConfig({...config, [key]:updated});
+    setEditIdx(null); setEditVal("");
+  };
+
+  return (
+    <div>
+      <SecTitle icon="⚙️" children="Configurações"/>
+
+      {sections.map(s=>(
+        <Card key={s.key} style={{marginBottom:12}}>
+          <button onClick={()=>setEditingSection(editingSection===s.key?null:s.key)}
+            style={{width:"100%",background:"none",border:"none",cursor:"pointer",
+              display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>{s.icon}</span>
+              <span style={{fontWeight:700,fontSize:15,color:C.text}}>{s.title}</span>
+              <span style={{fontSize:12,color:C.muted,background:C.light,borderRadius:10,padding:"1px 8px"}}>
+                {config[s.key]?.length||0}
+              </span>
+            </div>
+            <span style={{color:C.muted,fontSize:16}}>{editingSection===s.key?"▲":"▼"}</span>
+          </button>
+
+          {editingSection===s.key&&(
+            <div style={{marginTop:12}}>
+              {(config[s.key]||[]).map((item,i)=>(
+                <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                  {editIdx===i&&editingSection===s.key ? (
+                    <>
+                      <input style={{...inputBase,flex:1,padding:"7px 10px",fontSize:13}}
+                        value={editVal} onChange={e=>setEditVal(e.target.value)}
+                        onKeyDown={e=>e.key==="Enter"&&saveEdit(s.key)}
+                        autoFocus/>
+                      <button onClick={()=>saveEdit(s.key)}
+                        style={{background:C.success+"22",border:`1px solid ${C.success}55`,borderRadius:8,
+                          padding:"7px 12px",cursor:"pointer",color:C.success,fontSize:12,fontWeight:700}}>✅</button>
+                      <button onClick={()=>{setEditIdx(null);setEditVal("");}}
+                        style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                          padding:"7px 10px",cursor:"pointer",color:C.muted,fontSize:12}}>✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{flex:1,padding:"8px 12px",background:C.light,borderRadius:8,
+                        fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>
+                        {item}
+                      </div>
+                      <button onClick={()=>{setEditIdx(i);setEditVal(item);setEditingSection(s.key);}}
+                        style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
+                          padding:"7px 10px",cursor:"pointer",color:C.muted,fontSize:12}}>✏️</button>
+                      <button onClick={()=>deleteItem(s.key,i)}
+                        style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:8,
+                          padding:"7px 10px",cursor:"pointer",color:C.danger,fontSize:12}}>🗑️</button>
+                    </>
+                  )}
+                </div>
+              ))}
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
+                  placeholder={`Novo ${s.title.toLowerCase()}...`}
+                  value={editingSection===s.key?newItem:""}
+                  onChange={e=>setNewItem(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addItem(s.key)}/>
+                <button onClick={()=>addItem(s.key)}
+                  style={{background:s.color+"22",border:`1px solid ${s.color}55`,borderRadius:8,
+                    padding:"9px 14px",cursor:"pointer",color:s.color,fontSize:13,fontWeight:700}}>
+                  + Adicionar
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+      ))}
+
+      {/* Cortes do catálogo */}
+      <Card style={{marginBottom:12}}>
+        <button onClick={()=>setEditingSection(editingSection==="cortes"?null:"cortes")}
+          style={{width:"100%",background:"none",border:"none",cursor:"pointer",
+            display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>🔪</span>
+            <span style={{fontWeight:700,fontSize:15,color:C.text}}>Cortes do catálogo</span>
+            <span style={{fontSize:12,color:C.muted,background:C.light,borderRadius:10,padding:"1px 8px"}}>
+              {catalog.length}
+            </span>
+          </div>
+          <span style={{color:C.muted,fontSize:16}}>{editingSection==="cortes"?"▲":"▼"}</span>
+        </button>
+        {editingSection==="cortes"&&(
+          <div style={{marginTop:12}}>
+            {catalog.length===0&&<div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum corte cadastrado ainda.</div>}
+            {catalog.map((c,i)=>(
+              <div key={c.key||i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                <div style={{flex:1,padding:"8px 12px",background:C.light,borderRadius:8,fontSize:13,color:C.text}}>
+                  <strong style={{fontWeight:700}}>{c.nome}</strong>
+                  <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>{c.tipo}</span>
+                </div>
+                <button onClick={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==i))}
+                  style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:8,
+                    padding:"7px 10px",cursor:"pointer",color:C.danger,fontSize:12}}>🗑️</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function App() {
   const [meats,       setMeats]       = useState([]);
   const [exits,       setExits]       = useState([]);
   const [catalog,     setCatalog]     = useState([]);
+  const [appConfig,   setAppConfig]   = useState({
+    tipos:      [...TIPOS],
+    locais:     [...LOCAIS],
+    origens:    [...ORIGENS],
+    utilidades: ["churrasco","consumo"],
+  });
   const [tab,         setTab]         = useState("dashboard");
   const [loaded,      setLoaded]      = useState(false);
   const [saveStatus,  setSaveStatus]  = useState("idle");
@@ -2202,6 +2418,7 @@ export default function App() {
           setMeats(d.meats    || []);
           setExits(d.exits    || []);
           setCatalog(d.catalog || []);
+          if(d.appConfig) setAppConfig(d.appConfig);
           lastSaved.current = local;
         }
       }
@@ -2215,13 +2432,13 @@ export default function App() {
         const data = snapshot.val();
         if(data) {
           const hash = JSON.stringify(data);
-          // Só atualiza se Firebase tiver dado mais recente
           const localRaw = localStorage.getItem("mfi_local_data");
           if(!localRaw || hash !== lastSaved.current) {
             lastSaved.current = hash;
             setMeats(data.meats    || []);
             setExits(data.exits    || []);
             setCatalog(data.catalog || []);
+            if(data.appConfig) setAppConfig(data.appConfig);
           }
         }
       }, ()=>{});
@@ -2232,19 +2449,17 @@ export default function App() {
   // ── SAVE: localStorage (sempre) + Firebase (quando disponível) ────────────
   useEffect(()=>{
     if(!loaded) return;
-    const currentHash = JSON.stringify({meats, exits, catalog});
+    const currentHash = JSON.stringify({meats, exits, catalog, appConfig});
     if(currentHash === lastSaved.current) return;
 
     lastSaved.current = currentHash;
     setSaveStatus("saving");
 
-    // 1. Salva no localStorage imediatamente (sempre funciona)
     try {
       localStorage.setItem("mfi_local_data", currentHash);
       setSaveStatus("saved");
     } catch(e){}
 
-    // 2. Tenta sincronizar com Firebase em background (sem travar)
     const t = setTimeout(async ()=>{
       const ctrl    = new AbortController();
       const timeout = setTimeout(()=>ctrl.abort(), 8000);
@@ -2263,7 +2478,7 @@ export default function App() {
       }
     }, 1000);
     return ()=>clearTimeout(t);
-  },[meats, exits, catalog, loaded]);
+  },[meats, exits, catalog, appConfig, loaded]);
 
   // ── EXPORT / IMPORT ───────────────────────────────────────────────────────
   const exportData = () => {
@@ -2435,6 +2650,7 @@ export default function App() {
     {id:"entrada",   e:"➕", l:"Entrada"},
     {id:"churras",   e:"🔥", l:"Churrasco"},
     {id:"relatorios",e:"📊", l:"Relatórios"},
+    {id:"config",    e:"⚙️", l:"Config"},
   ];
 
   if(!loaded) return (
@@ -2580,6 +2796,7 @@ export default function App() {
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
