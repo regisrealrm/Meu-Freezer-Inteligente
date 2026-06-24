@@ -2240,18 +2240,17 @@ const STORAGE_KEY  = "mfi3_data";
 const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.com/${DB_PATH}.json`;
 
 // ─── AJUSTES ──────────────────────────────────────────────────────────────────
-// ─── AJUSTES ──────────────────────────────────────────────────────────────────
-function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUpdateMeats,onRenameMeatField}) {
+function Configuracoes({config,catalog,onUpdateConfig,onUpdateCatalog}) {
   const [editingSection,setEditingSection] = useState(null);
   const [newItem,       setNewItem]        = useState("");
   const [editIdx,       setEditIdx]        = useState(null);
   const [editVal,       setEditVal]        = useState("");
 
   const sections = [
-    {key:"tipos",      title:"Tipos de carne",          icon:"🥩", color:C.primary,  field:"tipo"},
-    {key:"locais",     title:"Locais de armazenamento",  icon:"📍", color:C.info,     field:"local"},
-    {key:"origens",    title:"Origens",                  icon:"🌿", color:C.success,  field:"origem"},
-    {key:"utilidades", title:"Utilidades",               icon:"🎯", color:C.warning,  field:"utilidade"},
+    {key:"tipos",      title:"Tipos de carne",          icon:"🥩", color:C.primary},
+    {key:"locais",     title:"Locais de armazenamento",  icon:"📍", color:C.info},
+    {key:"origens",    title:"Origens",                  icon:"🌿", color:C.success},
+    {key:"utilidades", title:"Utilidades",               icon:"🎯", color:C.warning},
   ];
 
   const openSection = (key) => {
@@ -2262,7 +2261,9 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
   const addItem = (key) => {
     const val = newItem.trim();
     if(!val) return;
-    if((config[key]||[]).some(v=>v.toLowerCase()===val.toLowerCase())) return alert("Já existe.");
+    if((config[key]||[]).some(v=>v.toLowerCase()===val.toLowerCase())) {
+      alert("Já existe."); return;
+    }
     onUpdateConfig({...config,[key]:[...(config[key]||[]),val]});
     setNewItem("");
   };
@@ -2271,46 +2272,30 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
     onUpdateConfig({...config,[key]:(config[key]||[]).filter((_,i)=>i!==idx)});
   };
 
-  // Salva edição de seção — propaga renomeação para todos os itens
-  const saveEdit = (key,field) => {
+  // Só atualiza o config — o App detecta automaticamente e propaga para meats
+  const saveEdit = (key) => {
     const val = editVal.trim();
     if(!val) return;
-    const oldVal = (config[key]||[])[editIdx];
-    if(oldVal===undefined||oldVal===null) return;
-
-    // 1. Atualiza config
-    const updated = [...(config[key]||[])];
-    updated[editIdx] = val;
-    onUpdateConfig({...config,[key]:updated});
-
-    // 2. Propaga para estoque — usa meats prop diretamente (sem functional update)
-    if(field && oldVal !== val && meats?.length) {
-      const renamed = meats.map(m => m[field]===oldVal ? {...m,[field]:val} : m);
-      onUpdateMeats(renamed);
-    }
-
+    const arr  = config[key]||[];
+    const old  = arr[editIdx];
+    if(old===undefined||old===val) { setEditIdx(null); setEditVal(""); return; }
+    onUpdateConfig({...config,[key]:arr.map((v,i)=>i===editIdx?val:v)});
     setEditIdx(null); setEditVal("");
   };
 
-  // Salva edição de corte do catálogo
+  // Só atualiza catálogo — o App detecta e propaga para meats
   const saveCorteEdit = (idx) => {
     const val = editVal.trim();
     if(!val) return;
-    const oldNome = catalog[idx]?.nome;
-    if(!oldNome) return;
-    const updatedCatalog = catalog.map((c,i)=>
+    const entry = catalog[idx];
+    if(!entry||entry.nome===val) { setEditIdx(null); setEditVal(""); return; }
+    onUpdateCatalog(catalog.map((c,i)=>
       i===idx ? {...c, nome:val, key:`${c.tipo}:${val.toLowerCase()}`} : c
-    );
-    onUpdateCatalog(updatedCatalog);
-    // Propaga para estoque
-    if(meats?.length) {
-      const renamed = meats.map(m => m.corte===oldNome ? {...m,corte:val} : m);
-      onUpdateMeats(renamed);
-    }
+    ));
     setEditIdx(null); setEditVal("");
   };
 
-  const ItemRow = ({label,sub,idx,onSave,onDelete}) => (
+  const Row = ({label,sub,idx,onSave,onDelete}) => (
     <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
       {editIdx===idx ? (
         <>
@@ -2329,8 +2314,7 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
         <>
           <div style={{flex:1,padding:"9px 12px",background:C.light,borderRadius:8,
             fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>
-            {label}
-            {sub&&<span style={{fontSize:11,color:C.muted,marginLeft:8,fontWeight:400}}>{sub}</span>}
+            {label}{sub&&<span style={{fontSize:11,color:C.muted,marginLeft:8,fontWeight:400}}>{sub}</span>}
           </div>
           <button onClick={()=>{setEditIdx(idx);setEditVal(label);}}
             style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
@@ -2346,7 +2330,7 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
   return (
     <div>
       <SecTitle icon="⚙️" children="Ajustes"/>
-      <div style={{fontSize:12,color:C.muted,marginBottom:14,textAlign:"center",padding:"0 8px"}}>
+      <div style={{fontSize:12,color:C.muted,marginBottom:14,textAlign:"center"}}>
         ✅ Renomear qualquer item atualiza automaticamente todos os itens do estoque.
       </div>
 
@@ -2364,12 +2348,11 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
             </div>
             <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
           </button>
-
           {editingSection===s.key&&(
             <div style={{marginTop:12}}>
               {(config[s.key]||[]).map((item,i)=>(
-                <ItemRow key={i} label={item} idx={i}
-                  onSave={()=>saveEdit(s.key,s.field)}
+                <Row key={i} label={item} idx={i}
+                  onSave={()=>saveEdit(s.key)}
                   onDelete={()=>deleteItem(s.key,i)}/>
               ))}
               <div style={{display:"flex",gap:8,marginTop:10}}>
@@ -2379,16 +2362,13 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
                   onKeyDown={e=>e.key==="Enter"&&addItem(s.key)}/>
                 <button onClick={()=>addItem(s.key)}
                   style={{background:s.color+"22",border:`1px solid ${s.color}55`,borderRadius:8,
-                    padding:"9px 14px",cursor:"pointer",color:s.color,fontSize:13,fontWeight:700}}>
-                  +
-                </button>
+                    padding:"9px 14px",cursor:"pointer",color:s.color,fontSize:13,fontWeight:700}}>+</button>
               </div>
             </div>
           )}
         </Card>
       ))}
 
-      {/* Cortes */}
       <Card style={{marginBottom:12}}>
         <button onClick={()=>openSection("cortes")}
           style={{width:"100%",background:"none",border:"none",cursor:"pointer",
@@ -2408,7 +2388,7 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
               <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum corte cadastrado ainda.</div>
             )}
             {catalog.map((c,i)=>(
-              <ItemRow key={c.key||i} label={c.nome} sub={c.tipo} idx={i}
+              <Row key={c.id||i} label={c.nome} sub={c.tipo} idx={i}
                 onSave={()=>saveCorteEdit(i)}
                 onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==i))}/>
             ))}
@@ -2439,8 +2419,56 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [changingUser,setChangingUser]= useState(false);
 
-  const lastSaved = useRef("");
-  const localTs   = useRef(0); // timestamp do último save local
+  const lastSaved  = useRef("");
+  const localTs    = useRef(0);
+  const prevConfig = useRef(null); // para detectar renomeações no appConfig
+  const prevCatalog= useRef(null); // para detectar renomeações no catálogo
+
+  // ── PROPAGAÇÃO AUTOMÁTICA: quando appConfig muda, atualiza meats ─────────
+  // Este useEffect é a fonte única de verdade para renomear campos em meats
+  useEffect(()=>{
+    if(!loaded) return;
+    const prev = prevConfig.current;
+    if(!prev) { prevConfig.current = appConfig; return; }
+
+    const fieldMap = {tipos:"tipo", locais:"local", origens:"origem", utilidades:"utilidade"};
+    let updated = null; // só aloca novo array se realmente mudou
+
+    for(const [key, field] of Object.entries(fieldMap)) {
+      const oldArr = prev[key] || [];
+      const newArr = appConfig[key] || [];
+      if(oldArr.length !== newArr.length) continue; // adição/remoção, não renomeação
+      for(let i=0; i<oldArr.length; i++) {
+        if(oldArr[i] !== newArr[i]) {
+          // Renomeação detectada: oldArr[i] → newArr[i]
+          if(!updated) updated = [...meats];
+          updated = updated.map(m => m[field]===oldArr[i] ? {...m,[field]:newArr[i]} : m);
+        }
+      }
+    }
+
+    if(updated) setMeats(updated);
+    prevConfig.current = appConfig;
+  },[appConfig, loaded]); // eslint-disable-line
+
+  // ── PROPAGAÇÃO: quando catálogo muda, renomeia cortes em meats ───────────
+  useEffect(()=>{
+    if(!loaded) return;
+    const prev = prevCatalog.current;
+    if(!prev) { prevCatalog.current = catalog; return; }
+
+    let updated = null;
+    for(const newEntry of catalog) {
+      const prevEntry = prev.find(e=>e.id===newEntry.id);
+      if(prevEntry && prevEntry.nome !== newEntry.nome) {
+        if(!updated) updated = [...meats];
+        updated = updated.map(m => m.corte===prevEntry.nome ? {...m,corte:newEntry.nome} : m);
+      }
+    }
+
+    if(updated) setMeats(updated);
+    prevCatalog.current = catalog;
+  },[catalog, loaded]); // eslint-disable-line
 
   // ── LOAD: localStorage primeiro, Firebase só se for mais recente ─────────
   useEffect(()=>{
@@ -2849,7 +2877,7 @@ export default function App() {
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} appConfig={appConfig}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
