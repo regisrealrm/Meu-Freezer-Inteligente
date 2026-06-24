@@ -2212,14 +2212,22 @@ function Relatorios({meats,exits}) {
       </Card>
 
       <Card>
-        <div style={{fontWeight:700,marginBottom:10}}>📋 Histórico de saídas ({exits.length})</div>
-        {exits.length===0
+        <div style={{fontWeight:700,marginBottom:10}}>📋 Histórico de saídas ({exits.filter(e=>e.motivo!=="transferência").length})</div>
+        {exits.filter(e=>e.motivo!=="transferência").length===0
           ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma saída registrada.</div>
-          :[...exits].reverse().map(e=>(
-            <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+          :[...exits].filter(e=>e.motivo!=="transferência").reverse().map(e=>(
+            <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
               <div>
-                <span style={{fontWeight:600}}>{e.carneNome}</span>
-                <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · {e.motivo}</span>
+                <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
+                {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
+                  padding:"1px 6px",borderRadius:4,marginLeft:6,textTransform:"capitalize"}}>{e.tipo}</span>}
+                <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
+                <span style={{fontSize:12,color:
+                  e.motivo==="churrasco"?C.primary:
+                  e.motivo==="descarte"?C.danger:
+                  e.motivo==="doação"?C.info:C.success,fontWeight:600}}>
+                  {e.motivo}
+                </span>
                 {e.eventoVinculado&&<span style={{fontSize:11,color:C.dim}}> · {e.eventoVinculado}</span>}
                 {e.feitorPor&&(
                   <span style={{fontSize:11,background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
@@ -2243,11 +2251,12 @@ const STORAGE_KEY  = "mfi3_data";
 const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.com/${DB_PATH}.json`;
 
 // ─── AJUSTES ──────────────────────────────────────────────────────────────────
-function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog, onUpdateMeats}) {
-  const [editingSection, setEditingSection] = useState(null);
-  const [newItem,        setNewItem]        = useState("");
-  const [editIdx,        setEditIdx]        = useState(null);
-  const [editVal,        setEditVal]        = useState("");
+// ─── AJUSTES ──────────────────────────────────────────────────────────────────
+function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onRenameMeatField}) {
+  const [editingSection,setEditingSection] = useState(null);
+  const [newItem,       setNewItem]        = useState("");
+  const [editIdx,       setEditIdx]        = useState(null);
+  const [editVal,       setEditVal]        = useState("");
 
   const sections = [
     {key:"tipos",      title:"Tipos de carne",          icon:"🥩", color:C.primary,  field:"tipo"},
@@ -2256,13 +2265,8 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
     {key:"utilidades", title:"Utilidades",               icon:"🎯", color:C.warning,  field:"utilidade"},
   ];
 
-  const propagateRename = (field, oldVal, newVal) => {
-    if(!oldVal||oldVal===newVal) return;
-    onUpdateMeats(p=>p.map(m=>m[field]===oldVal?{...m,[field]:newVal}:m));
-  };
-
   const openSection = (key) => {
-    setEditingSection(editingSection===key?null:key);
+    setEditingSection(s=>s===key?null:key);
     setEditIdx(null); setEditVal(""); setNewItem("");
   };
 
@@ -2270,36 +2274,43 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
     const val = newItem.trim();
     if(!val) return;
     if((config[key]||[]).some(v=>v.toLowerCase()===val.toLowerCase())) return alert("Já existe.");
-    onUpdateConfig({...config, [key]:[...(config[key]||[]), val]});
+    onUpdateConfig({...config,[key]:[...(config[key]||[]),val]});
     setNewItem("");
   };
 
-  const deleteItem = (key, idx) => {
-    onUpdateConfig({...config, [key]:(config[key]||[]).filter((_,i)=>i!==idx)});
+  const deleteItem = (key,idx) => {
+    onUpdateConfig({...config,[key]:(config[key]||[]).filter((_,i)=>i!==idx)});
   };
 
-  const saveEdit = (key, field) => {
+  // Salva edição de seção — propaga renomeação para todos os itens
+  const saveEdit = (key,field) => {
     const val = editVal.trim();
     if(!val) return;
     const oldVal = (config[key]||[])[editIdx];
+    if(oldVal===undefined) return;
     const updated = [...(config[key]||[])];
     updated[editIdx] = val;
-    onUpdateConfig({...config, [key]:updated});
-    propagateRename(field, oldVal, val);
+    onUpdateConfig({...config,[key]:updated});
+    // Propaga para estoque se o valor mudou
+    if(field && oldVal !== val) onRenameMeatField(field, oldVal, val);
     setEditIdx(null); setEditVal("");
   };
 
+  // Salva edição de corte do catálogo
   const saveCorteEdit = (idx) => {
     const val = editVal.trim();
     if(!val) return;
     const oldNome = catalog[idx]?.nome;
-    const updatedCatalog = catalog.map((c,i)=>i===idx?{...c,nome:val,key:`${c.tipo}:${val.toLowerCase()}`}:c);
+    if(!oldNome) return;
+    const updatedCatalog = catalog.map((c,i)=>
+      i===idx ? {...c, nome:val, key:`${c.tipo}:${val.toLowerCase()}`} : c
+    );
     onUpdateCatalog(updatedCatalog);
-    onUpdateMeats(p=>p.map(m=>m.corte===oldNome?{...m,corte:val}:m));
+    onRenameMeatField("corte", oldNome, val);
     setEditIdx(null); setEditVal("");
   };
 
-  const ItemRow = ({label, sub, idx, onSave, onDelete}) => (
+  const ItemRow = ({label,sub,idx,onSave,onDelete}) => (
     <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
       {editIdx===idx ? (
         <>
@@ -2316,8 +2327,8 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
         </>
       ) : (
         <>
-          <div style={{flex:1,padding:"9px 12px",background:C.light,borderRadius:8,fontSize:13,
-            fontWeight:600,color:C.text,textTransform:"capitalize"}}>
+          <div style={{flex:1,padding:"9px 12px",background:C.light,borderRadius:8,
+            fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>
             {label}
             {sub&&<span style={{fontSize:11,color:C.muted,marginLeft:8,fontWeight:400}}>{sub}</span>}
           </div>
@@ -2335,8 +2346,8 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
   return (
     <div>
       <SecTitle icon="⚙️" children="Ajustes"/>
-      <div style={{fontSize:12,color:C.muted,marginBottom:14,textAlign:"center"}}>
-        Renomear um item atualiza automaticamente todos os itens do estoque.
+      <div style={{fontSize:12,color:C.muted,marginBottom:14,textAlign:"center",padding:"0 8px"}}>
+        ✅ Renomear qualquer item atualiza automaticamente todos os itens do estoque.
       </div>
 
       {sections.map(s=>(
@@ -2358,7 +2369,7 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
             <div style={{marginTop:12}}>
               {(config[s.key]||[]).map((item,i)=>(
                 <ItemRow key={i} label={item} idx={i}
-                  onSave={()=>saveEdit(s.key, s.field)}
+                  onSave={()=>saveEdit(s.key,s.field)}
                   onDelete={()=>deleteItem(s.key,i)}/>
               ))}
               <div style={{display:"flex",gap:8,marginTop:10}}>
@@ -2378,7 +2389,7 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
       ))}
 
       {/* Cortes */}
-      <Card style={{marginBottom:10}}>
+      <Card style={{marginBottom:12}}>
         <button onClick={()=>openSection("cortes")}
           style={{width:"100%",background:"none",border:"none",cursor:"pointer",
             display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
@@ -2399,9 +2410,7 @@ function Configuracoes({config, catalog, meats, onUpdateConfig, onUpdateCatalog,
             {catalog.map((c,i)=>(
               <ItemRow key={c.key||i} label={c.nome} sub={c.tipo} idx={i}
                 onSave={()=>saveCorteEdit(i)}
-                onDelete={()=>{
-                  onUpdateCatalog(catalog.filter((_,j)=>j!==i));
-                }}/>
+                onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==i))}/>
             ))}
           </div>
         )}
@@ -2621,6 +2630,15 @@ export default function App() {
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
   const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
 
+  // Renomeia campo em TODOS os itens do estoque de uma vez (Ajustes)
+  const renameMeatField = (field, oldVal, newVal) => {
+    if(!field||!oldVal||oldVal===newVal) return;
+    setMeats(prev => {
+      const updated = prev.map(m => m[field]===oldVal ? {...m,[field]:newVal} : m);
+      return updated;
+    });
+  };
+
   // Mescla dois itens em um — absorve os pacotes do item2 no item1
   const mergeItems = (id1, id2) => {
     const m1 = meats.find(m=>m.id===id1);
@@ -2824,7 +2842,7 @@ export default function App() {
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
