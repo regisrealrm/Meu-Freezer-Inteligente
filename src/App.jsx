@@ -2079,15 +2079,16 @@ function Churrasometro({meats, catalog}) {
 }
 
 // ─── RELATÓRIOS ───────────────────────────────────────────────────────────────
-function Relatorios({meats,exits}) {
+function Relatorios({meats,exits,appConfig}) {
+  const cfgTipos  = appConfig?.tipos || TIPOS;
   const active    = meats.filter(m=>m.status!=="consumido"&&m.pesoTotal>0);
   const totalKg   = active.reduce((s,m)=>s+m.pesoTotal,0);
   const totalInv  = meats.reduce((s,m)=>s+(m.precoPago||0),0);
   const totalCons = exits.reduce((s,e)=>s+e.pesoRetirado,0);
   const totalDesc = exits.filter(e=>e.motivo==="descarte").reduce((s,e)=>s+e.pesoRetirado,0);
 
-  const byTipo   = TIPOS.map(t=>({name:t,kg:active.filter(m=>m.tipo===t).reduce((s,m)=>s+m.pesoTotal,0)})).filter(x=>x.kg>0);
-  const consTipo = TIPOS.map(t=>({name:t,kg:exits.filter(e=>e.tipo===t).reduce((s,e)=>s+e.pesoRetirado,0)})).filter(x=>x.kg>0);
+  const byTipo   = cfgTipos.map(t=>({name:t,kg:active.filter(m=>m.tipo===t).reduce((s,m)=>s+m.pesoTotal,0)})).filter(x=>x.kg>0);
+  const consTipo = cfgTipos.map(t=>({name:t,kg:exits.filter(e=>e.tipo===t).reduce((s,e)=>s+e.pesoRetirado,0)})).filter(x=>x.kg>0);
 
   const ttStyle  = {background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:12};
 
@@ -2439,14 +2440,14 @@ export default function App() {
   const [changingUser,setChangingUser]= useState(false);
 
   const lastSaved = useRef("");
+  const localTs   = useRef(0); // timestamp do último save local
 
-  // ── LOAD: localStorage primeiro (instantâneo), Firebase depois (sync) ─────
+  // ── LOAD: localStorage primeiro, Firebase só se for mais recente ─────────
   useEffect(()=>{
     try {
       const savedUser = localStorage.getItem("mfi3_user");
       if(savedUser && USERS.includes(savedUser)) setCurrentUser(savedUser);
 
-      // Carrega localStorage imediatamente
       const local = localStorage.getItem("mfi_local_data");
       if(local) {
         const d = JSON.parse(local);
@@ -2455,6 +2456,7 @@ export default function App() {
           setExits(d.exits    || []);
           setCatalog(d.catalog || []);
           if(d.appConfig) setAppConfig(d.appConfig);
+          localTs.current   = d._ts || 0;
           lastSaved.current = local;
         }
       }
@@ -2462,32 +2464,38 @@ export default function App() {
     setLoaded(true);
     setStorageOk(true);
 
-    // Firebase: sincroniza em background (se disponível)
+    // Firebase: só atualiza se o dado do Firebase for MAIS RECENTE que o local
     try {
       const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
         const data = snapshot.val();
-        if(data) {
-          const hash = JSON.stringify(data);
-          const localRaw = localStorage.getItem("mfi_local_data");
-          if(!localRaw || hash !== lastSaved.current) {
-            lastSaved.current = hash;
-            setMeats(data.meats    || []);
-            setExits(data.exits    || []);
-            setCatalog(data.catalog || []);
-            if(data.appConfig) setAppConfig(data.appConfig);
-          }
-        }
+        if(!data) return;
+        const fbTs = data._ts || 0;
+        // Ignora se dado local é mais novo ou igual
+        if(fbTs <= localTs.current) return;
+        // Firebase tem dado mais recente (outro dispositivo salvou)
+        const hash = JSON.stringify(data);
+        lastSaved.current  = hash;
+        localTs.current    = fbTs;
+        setMeats(data.meats    || []);
+        setExits(data.exits    || []);
+        setCatalog(data.catalog || []);
+        if(data.appConfig) setAppConfig(data.appConfig);
+        localStorage.setItem("mfi_local_data", hash);
       }, ()=>{});
       return ()=>unsubscribe();
     } catch(e){}
   },[]);
 
-  // ── SAVE: localStorage (sempre) + Firebase (quando disponível) ────────────
+  // ── SAVE: localStorage imediato + Firebase background ────────────────────
   useEffect(()=>{
     if(!loaded) return;
-    const currentHash = JSON.stringify({meats, exits, catalog, appConfig});
+    const ts          = Date.now();
+    const payload     = {meats, exits, catalog, appConfig, _ts: ts};
+    const currentHash = JSON.stringify(payload);
     if(currentHash === lastSaved.current) return;
 
+    // Atualiza timestamp e hash imediatamente (ANTES do Firebase responder)
+    localTs.current   = ts;
     lastSaved.current = currentHash;
     setSaveStatus("saving");
 
@@ -2510,9 +2518,9 @@ export default function App() {
         if(!res.ok) console.warn("Firebase sync error:", res.status);
       } catch(e){
         clearTimeout(timeout);
-        console.warn("Firebase offline, usando localStorage:", e.message);
+        console.warn("Firebase offline:", e.message);
       }
-    }, 1000);
+    }, 800);
     return ()=>clearTimeout(t);
   },[meats, exits, catalog, appConfig, loaded]);
 
@@ -2840,7 +2848,7 @@ export default function App() {
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
-        {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
+        {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} appConfig={appConfig}/>}
         {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField}/>}
       </div>
 
