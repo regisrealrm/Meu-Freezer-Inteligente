@@ -2240,7 +2240,7 @@ const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.c
 
 // ─── AJUSTES ──────────────────────────────────────────────────────────────────
 // ─── AJUSTES ──────────────────────────────────────────────────────────────────
-function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onRenameMeatField}) {
+function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUpdateMeats,onRenameMeatField}) {
   const [editingSection,setEditingSection] = useState(null);
   const [newItem,       setNewItem]        = useState("");
   const [editIdx,       setEditIdx]        = useState(null);
@@ -2275,12 +2275,19 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onRe
     const val = editVal.trim();
     if(!val) return;
     const oldVal = (config[key]||[])[editIdx];
-    if(oldVal===undefined) return;
+    if(oldVal===undefined||oldVal===null) return;
+
+    // 1. Atualiza config
     const updated = [...(config[key]||[])];
     updated[editIdx] = val;
     onUpdateConfig({...config,[key]:updated});
-    // Propaga para estoque se o valor mudou
-    if(field && oldVal !== val) onRenameMeatField(field, oldVal, val);
+
+    // 2. Propaga para estoque — usa meats prop diretamente (sem functional update)
+    if(field && oldVal !== val && meats?.length) {
+      const renamed = meats.map(m => m[field]===oldVal ? {...m,[field]:val} : m);
+      onUpdateMeats(renamed);
+    }
+
     setEditIdx(null); setEditVal("");
   };
 
@@ -2294,7 +2301,11 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onRe
       i===idx ? {...c, nome:val, key:`${c.tipo}:${val.toLowerCase()}`} : c
     );
     onUpdateCatalog(updatedCatalog);
-    onRenameMeatField("corte", oldNome, val);
+    // Propaga para estoque
+    if(meats?.length) {
+      const renamed = meats.map(m => m.corte===oldNome ? {...m,corte:val} : m);
+      onUpdateMeats(renamed);
+    }
     setEditIdx(null); setEditVal("");
   };
 
