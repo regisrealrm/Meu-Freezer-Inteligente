@@ -27,6 +27,30 @@ const MOTIVOS= ["consumo","churrasco","descarte","doação","transferência"];
 const USERS  = ["Régis","Luciene","Hugo","Lavínia"];
 const ORIGENS= ["in natura","do sol","temperada"];
 
+// ─── DYNAMIC PALETTES (used when config overrides defaults) ──────────────────
+const ORIGEM_PALETTE = [
+  {icon:"🌿", color:"#00CFA8"},
+  {icon:"☀️", color:"#FFAD00"},
+  {icon:"🌶️", color:"#FF7043"},
+  {icon:"🧊", color:"#4DAFFF"},
+  {icon:"🥩", color:"#E91E63"},
+  {icon:"🌾", color:"#8BC34A"},
+];
+const UTIL_PALETTE = [
+  {icon:"🔥", color:"#FF6B35"},
+  {icon:"🍽️", color:"#00CFA8"},
+  {icon:"🎉", color:"#9C27B0"},
+  {icon:"🌟", color:"#FFAD00"},
+];
+const getOrigenPalette = (origens, val) => {
+  const idx = origens.indexOf(val);
+  return ORIGEM_PALETTE[Math.max(0,idx) % ORIGEM_PALETTE.length];
+};
+const getUtilPalette = (utils, val) => {
+  const idx = utils.indexOf(val);
+  return UTIL_PALETTE[Math.max(0,idx) % UTIL_PALETTE.length];
+};
+
 // ─── PACOTES HELPERS ──────────────────────────────────────────────────────────
 const makePacote = (peso) => ({id:uid(), peso, pesoAtual:peso, status:"disponível"});
 
@@ -168,13 +192,15 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts}) {
+function Dashboard({meats,exits,alerts,appConfig}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
   const [openOrigem,setOpenOrigem]= useState(null);
 
-  // Ao abrir qualquer painel, fecha todos os outros
+  const origens    = appConfig?.origens    || ORIGENS;
+  const utilidades = appConfig?.utilidades || ["churrasco","consumo"];
+
   const toggle = k => {
     setOpen(p=>p===k?null:k);
     setOpenUtil(null); setOpenOrigem(null); setLocalFlt("todos");
@@ -190,24 +216,20 @@ function Dashboard({meats,exits,alerts}) {
 
   const totalKg    = meats.reduce((s,m)=>s+m.pesoTotal,0);
   const valorAtual = meats.reduce((s,m)=>s+(m.precoPago||0),0);
-  const byTipo     = TIPOS.map(t=>({t,kg:meats.filter(m=>m.tipo===t).reduce((s,m)=>s+m.pesoTotal,0),count:meats.filter(m=>m.tipo===t).length})).filter(x=>x.kg>0);
+  const byTipo     = (appConfig?.tipos||TIPOS).map(t=>({t,kg:meats.filter(m=>m.tipo===t).reduce((s,m)=>s+m.pesoTotal,0),count:meats.filter(m=>m.tipo===t).length})).filter(x=>x.kg>0);
 
   const locaisAtivos = LOCAIS.filter(l=>meats.some(m=>m.local===l));
   const kgByLocal    = l => meats.filter(m=>m.local===l).reduce((s,m)=>s+m.pesoTotal,0);
 
-  // Origem breakdown
-  const natItems  = meats.filter(m=>m.origem==="in natura");
-  const solItems  = meats.filter(m=>m.origem==="do sol");
-  const tempItems = meats.filter(m=>m.origem==="temperada");
-  const kgNat     = natItems.reduce((s,m)=>s+m.pesoTotal,0);
-  const kgSol     = solItems.reduce((s,m)=>s+m.pesoTotal,0);
-  const kgTemp    = tempItems.reduce((s,m)=>s+m.pesoTotal,0);
+  // Origem — dinâmico via appConfig
+  const origenData = origens
+    .map(o=>({o, items:meats.filter(m=>m.origem===o), kg:meats.filter(m=>m.origem===o).reduce((s,m)=>s+m.pesoTotal,0), pal:getOrigenPalette(origens,o)}))
+    .filter(x=>x.kg>0);
 
-  // Utilidade breakdown
-  const churrascoItems = meats.filter(m=>m.utilidade==="churrasco");
-  const consumoItems   = meats.filter(m=>m.utilidade==="consumo");
-  const kgChurrasco    = churrascoItems.reduce((s,m)=>s+m.pesoTotal,0);
-  const kgConsumo      = consumoItems.reduce((s,m)=>s+m.pesoTotal,0);
+  // Utilidade — dinâmico via appConfig
+  const utilData = utilidades
+    .map(u=>({u, items:meats.filter(m=>m.utilidade===u), kg:meats.filter(m=>m.utilidade===u).reduce((s,m)=>s+m.pesoTotal,0), pal:getUtilPalette(utilidades,u)}))
+    .filter(x=>x.kg>0);
 
   const boxes = [
     {id:"estoque", icon:"🧊", label:"Total de estoque", value:fmtKg(totalKg),          color:C.primary},
@@ -240,65 +262,39 @@ function Dashboard({meats,exits,alerts}) {
         })}
       </div>
 
-      {/* ── In Natura / Do Sol / Temperada ──────────────── */}
-      {(kgNat>0||kgSol>0||kgTemp>0)&&(
+      {/* ── Origens — dinâmico ──────────────────────────── */}
+      {origenData.length>0&&(
         <>
           <div style={{display:"flex",gap:8,marginBottom:openOrigem?8:12,flexWrap:"wrap"}}>
-            {kgNat>0&&(
-              <div onClick={()=>toggleOrigem("in natura")}
-                style={{flex:"1 1 80px",background:openOrigem==="in natura"?C.success+"18":C.card,
-                  border:`1px solid ${openOrigem==="in natura"?C.success:C.border}`,
+            {origenData.map(({o,items,kg,pal})=>(
+              <div key={o} onClick={()=>toggleOrigem(o)}
+                style={{flex:"1 1 80px",background:openOrigem===o?pal.color+"18":C.card,
+                  border:`1px solid ${openOrigem===o?pal.color:C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
-                  borderLeft:`4px solid ${C.success}`}}>
-                <div style={{fontSize:11,color:C.success,fontWeight:700}}>🌿 In Natura</div>
-                <div style={{fontSize:18,fontWeight:800,color:C.success}}>{fmtKg(kgNat)}</div>
-                <div style={{fontSize:11,color:C.muted}}>{natItems.length} item{natItems.length!==1?"s":""} · {openOrigem==="in natura"?"▲":"▼"}</div>
+                  borderLeft:`4px solid ${pal.color}`}}>
+                <div style={{fontSize:11,color:pal.color,fontWeight:700}}>{pal.icon} {o}</div>
+                <div style={{fontSize:18,fontWeight:800,color:pal.color}}>{fmtKg(kg)}</div>
+                <div style={{fontSize:11,color:C.muted}}>{items.length} item{items.length!==1?"s":""} · {openOrigem===o?"▲":"▼"}</div>
               </div>
-            )}
-            {kgSol>0&&(
-              <div onClick={()=>toggleOrigem("do sol")}
-                style={{flex:"1 1 80px",background:openOrigem==="do sol"?C.warning+"18":C.card,
-                  border:`1px solid ${openOrigem==="do sol"?C.warning:C.border}`,
-                  borderRadius:12,padding:"12px 14px",cursor:"pointer",
-                  borderLeft:`4px solid ${C.warning}`}}>
-                <div style={{fontSize:11,color:C.warning,fontWeight:700}}>☀️ Do Sol</div>
-                <div style={{fontSize:18,fontWeight:800,color:C.warning}}>{fmtKg(kgSol)}</div>
-                <div style={{fontSize:11,color:C.muted}}>{solItems.length} item{solItems.length!==1?"s":""} · {openOrigem==="do sol"?"▲":"▼"}</div>
-              </div>
-            )}
-            {kgTemp>0&&(
-              <div onClick={()=>toggleOrigem("temperada")}
-                style={{flex:"1 1 80px",background:openOrigem==="temperada"?"#FF704318":C.card,
-                  border:`1px solid ${openOrigem==="temperada"?"#FF7043":C.border}`,
-                  borderRadius:12,padding:"12px 14px",cursor:"pointer",
-                  borderLeft:"4px solid #FF7043"}}>
-                <div style={{fontSize:11,color:"#FF7043",fontWeight:700}}>🌶️ Temperada</div>
-                <div style={{fontSize:18,fontWeight:800,color:"#FF7043"}}>{fmtKg(kgTemp)}</div>
-                <div style={{fontSize:11,color:C.muted}}>{tempItems.length} item{tempItems.length!==1?"s":""} · {openOrigem==="temperada"?"▲":"▼"}</div>
-              </div>
-            )}
+            ))}
           </div>
-
-          {/* Breakdown por tipo quando origem clicada */}
           {openOrigem&&(()=>{
-            const origemColor = openOrigem==="do sol"?C.warning:openOrigem==="temperada"?"#FF7043":C.success;
-            const origemLabel = openOrigem==="do sol"?"☀️ Do Sol":openOrigem==="temperada"?"🌶️ Temperada":"🌿 In Natura";
-            const origemItens = meats.filter(m=>m.origem===openOrigem);
-            const origemKgTotal = origemItens.reduce((s,m)=>s+m.pesoTotal,0);
+            const od = origenData.find(x=>x.o===openOrigem);
+            if(!od) return null;
             return (
-              <Card style={{marginBottom:12,borderTop:`3px solid ${origemColor}`}}>
-                <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>{origemLabel} por tipo</div>
-                {TIPOS.map(t=>{
-                  const itens = origemItens.filter(m=>m.tipo===t);
-                  const kg    = itens.reduce((s,m)=>s+m.pesoTotal,0);
+              <Card style={{marginBottom:12,borderTop:`3px solid ${od.pal.color}`}}>
+                <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>{od.pal.icon} {openOrigem} por tipo</div>
+                {(appConfig?.tipos||TIPOS).map(t=>{
+                  const itens=od.items.filter(m=>m.tipo===t);
+                  const kg=itens.reduce((s,m)=>s+m.pesoTotal,0);
                   if(kg===0) return null;
-                  const pct   = origemKgTotal>0?(kg/origemKgTotal)*100:0;
-                  const accent= TIPO_COLORS[t]||C.muted;
+                  const pct=od.kg>0?(kg/od.kg)*100:0;
+                  const accent=TIPO_COLORS[t]||C.muted;
                   return (
                     <div key={t} style={{marginBottom:10}}>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                         <span style={{fontSize:13,fontWeight:600,textTransform:"capitalize",color:C.text}}>{t}</span>
-                        <div style={{textAlign:"right"}}>
+                        <div>
                           <span style={{fontSize:13,fontWeight:800,color:accent}}>{fmtKg(kg)}</span>
                           <span style={{fontSize:11,color:C.muted}}> · {itens.length} item{itens.length!==1?"s":""}</span>
                         </div>
@@ -306,15 +302,12 @@ function Dashboard({meats,exits,alerts}) {
                       <div style={{background:C.border,borderRadius:4,height:6,overflow:"hidden"}}>
                         <div style={{width:`${pct}%`,height:"100%",background:accent,transition:"width 0.4s"}}/>
                       </div>
-                      <div style={{marginTop:4,paddingLeft:8}}>
-                        {itens.map(m=>(
-                          <div key={m.id} style={{display:"flex",justifyContent:"space-between",
-                            fontSize:11,color:C.muted,padding:"2px 0"}}>
-                            <span>{m.corte||m.tipo}</span>
-                            <span style={{color:accent,fontWeight:600}}>{fmtKg(m.pesoTotal)}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {itens.map(m=>(
+                        <div key={m.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,padding:"2px 8px"}}>
+                          <span>{m.corte||m.tipo}</span>
+                          <span style={{color:accent,fontWeight:600}}>{fmtKg(m.pesoTotal)}</span>
+                        </div>
+                      ))}
                     </div>
                   );
                 })}
@@ -324,74 +317,58 @@ function Dashboard({meats,exits,alerts}) {
         </>
       )}
 
-      {/* ── Utilidade: Churrasco / Consumo ───────────────── */}
-      {(kgChurrasco>0||kgConsumo>0)&&(
+      {/* ── Utilidade — dinâmico ─────────────────────────── */}
+      {utilData.length>0&&(
         <>
           <div style={{display:"flex",gap:8,marginBottom:openUtil?8:12}}>
-            {kgChurrasco>0&&(
-              <div onClick={()=>toggleUtil("churrasco")}
-                style={{flex:1,background:openUtil==="churrasco"?C.primary+"18":C.card,
-                  border:`1px solid ${openUtil==="churrasco"?C.primary:C.border}`,
+            {utilData.map(({u,items,kg,pal})=>(
+              <div key={u} onClick={()=>toggleUtil(u)}
+                style={{flex:1,background:openUtil===u?pal.color+"18":C.card,
+                  border:`1px solid ${openUtil===u?pal.color:C.border}`,
                   borderRadius:12,padding:"12px 14px",cursor:"pointer",
-                  borderLeft:`4px solid ${C.primary}`}}>
-                <div style={{fontSize:11,color:C.primary,fontWeight:700}}>🔥 Churrasco</div>
-                <div style={{fontSize:18,fontWeight:800,color:C.primary}}>{fmtKg(kgChurrasco)}</div>
-                <div style={{fontSize:11,color:C.muted}}>{churrascoItems.length} item{churrascoItems.length!==1?"s":""} · {openUtil==="churrasco"?"▲":"▼"}</div>
+                  borderLeft:`4px solid ${pal.color}`}}>
+                <div style={{fontSize:11,color:pal.color,fontWeight:700}}>{pal.icon} {u}</div>
+                <div style={{fontSize:18,fontWeight:800,color:pal.color}}>{fmtKg(kg)}</div>
+                <div style={{fontSize:11,color:C.muted}}>{items.length} item{items.length!==1?"s":""} · {openUtil===u?"▲":"▼"}</div>
               </div>
-            )}
-            {kgConsumo>0&&(
-              <div onClick={()=>toggleUtil("consumo")}
-                style={{flex:1,background:openUtil==="consumo"?C.success+"18":C.card,
-                  border:`1px solid ${openUtil==="consumo"?C.success:C.border}`,
-                  borderRadius:12,padding:"12px 14px",cursor:"pointer",
-                  borderLeft:`4px solid ${C.success}`}}>
-                <div style={{fontSize:11,color:C.success,fontWeight:700}}>🍽️ Consumo</div>
-                <div style={{fontSize:18,fontWeight:800,color:C.success}}>{fmtKg(kgConsumo)}</div>
-                <div style={{fontSize:11,color:C.muted}}>{consumoItems.length} item{consumoItems.length!==1?"s":""} · {openUtil==="consumo"?"▲":"▼"}</div>
-              </div>
-            )}
+            ))}
           </div>
-
-          {/* Breakdown por tipo quando card clicado */}
-          {openUtil&&(
-            <Card style={{marginBottom:12,borderTop:`3px solid ${openUtil==="churrasco"?C.primary:C.success}`}}>
-              <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>
-                {openUtil==="churrasco"?"🔥 Churrasco por tipo":"🍽️ Consumo por tipo"}
-              </div>
-              {TIPOS.map(t=>{
-                const itens = meats.filter(m=>m.utilidade===openUtil&&m.tipo===t);
-                const kg    = itens.reduce((s,m)=>s+m.pesoTotal,0);
-                if(kg===0) return null;
-                const total = openUtil==="churrasco"?kgChurrasco:kgConsumo;
-                const pct   = total>0?(kg/total)*100:0;
-                const accent= TIPO_COLORS[t]||C.muted;
-                return (
-                  <div key={t} style={{marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <span style={{fontSize:13,fontWeight:600,textTransform:"capitalize",color:C.text}}>{t}</span>
-                      <div style={{textAlign:"right"}}>
-                        <span style={{fontSize:13,fontWeight:800,color:accent}}>{fmtKg(kg)}</span>
-                        <span style={{fontSize:11,color:C.muted}}> · {itens.length} item{itens.length!==1?"s":""}</span>
+          {openUtil&&(()=>{
+            const ud = utilData.find(x=>x.u===openUtil);
+            if(!ud) return null;
+            return (
+              <Card style={{marginBottom:12,borderTop:`3px solid ${ud.pal.color}`}}>
+                <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>{ud.pal.icon} {openUtil} por tipo</div>
+                {(appConfig?.tipos||TIPOS).map(t=>{
+                  const itens=ud.items.filter(m=>m.tipo===t);
+                  const kg=itens.reduce((s,m)=>s+m.pesoTotal,0);
+                  if(kg===0) return null;
+                  const pct=ud.kg>0?(kg/ud.kg)*100:0;
+                  const accent=TIPO_COLORS[t]||C.muted;
+                  return (
+                    <div key={t} style={{marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                        <span style={{fontSize:13,fontWeight:600,textTransform:"capitalize",color:C.text}}>{t}</span>
+                        <div>
+                          <span style={{fontSize:13,fontWeight:800,color:accent}}>{fmtKg(kg)}</span>
+                          <span style={{fontSize:11,color:C.muted}}> · {itens.length} item{itens.length!==1?"s":""}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{background:C.border,borderRadius:4,height:6,overflow:"hidden"}}>
-                      <div style={{width:`${pct}%`,height:"100%",background:accent,transition:"width 0.4s"}}/>
-                    </div>
-                    {/* Lista dos cortes */}
-                    <div style={{marginTop:4,paddingLeft:8}}>
+                      <div style={{background:C.border,borderRadius:4,height:6,overflow:"hidden"}}>
+                        <div style={{width:`${pct}%`,height:"100%",background:accent,transition:"width 0.4s"}}/>
+                      </div>
                       {itens.map(m=>(
-                        <div key={m.id} style={{display:"flex",justifyContent:"space-between",
-                          fontSize:11,color:C.muted,padding:"2px 0"}}>
+                        <div key={m.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,padding:"2px 8px"}}>
                           <span>{m.corte||m.tipo}</span>
                           <span style={{color:accent,fontWeight:600}}>{fmtKg(m.pesoTotal)}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
-                );
-              })}
-            </Card>
-          )}
+                  );
+                })}
+              </Card>
+            );
+          })()}
         </>
       )}
 
@@ -532,7 +509,7 @@ function Dashboard({meats,exits,alerts}) {
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit}) {
+function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig}) {
   const [flocal,     setFlocal]     = useState("todos");
   const [futilidade,  setFutilidade]  = useState("todos");
   const [forigem,     setForigem]     = useState("todos");
@@ -657,7 +634,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>📍 LOCAL</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
                   <button style={pill(flocal==="todos")} onClick={()=>setFlocal("todos")}>Todos</button>
-                  {LOCAIS.filter(l=>countBy(l)>0).map(l=>(
+                  {(appConfig?.locais||LOCAIS).filter(l=>countBy(l)>0).map(l=>(
                     <button key={l} style={pill(flocal===l)} onClick={()=>setFlocal(l)}>{l}</button>
                   ))}
                 </div>
@@ -666,7 +643,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🥩 TIPO</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
                   <button style={pill(ftipo==="todos",C.info)} onClick={()=>setFtipo("todos")}>Todos</button>
-                  {TIPOS.filter(t=>meats.some(m=>m.tipo===t)).map(t=>(
+                  {(appConfig?.tipos||TIPOS).filter(t=>meats.some(m=>m.tipo===t)).map(t=>(
                     <button key={t} style={{...pill(ftipo===t,C.info),textTransform:"capitalize"}} onClick={()=>setFtipo(t)}>{t}</button>
                   ))}
                 </div>
@@ -674,16 +651,22 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                 {/* Origem */}
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🌿 ORIGEM</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  {[{v:"todos",l:"Todas"},{v:"in natura",l:"🌿 In Natura"},{v:"do sol",l:"☀️ Do Sol"},{v:"temperada",l:"🌶️ Temperada"}].map(o=>(
-                    <button key={o.v} style={pill(forigem===o.v,C.success)} onClick={()=>setForigem(o.v)}>{o.l}</button>
+                  <button style={pill(forigem==="todos",C.success)} onClick={()=>setForigem("todos")}>Todas</button>
+                  {(appConfig?.origens||ORIGENS).map((o,i)=>(
+                    <button key={o} style={pill(forigem===o,C.success)} onClick={()=>setForigem(o)}>
+                      {getOrigenPalette(appConfig?.origens||ORIGENS,o).icon} {o}
+                    </button>
                   ))}
                 </div>
 
                 {/* Utilidade */}
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🎯 UTILIDADE</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  {[{v:"todos",l:"Tudo"},{v:"churrasco",l:"🔥 Churrasco"},{v:"consumo",l:"🍽️ Consumo"}].map(u=>(
-                    <button key={u.v} style={pill(futilidade===u.v)} onClick={()=>setFutilidade(u.v)}>{u.l}</button>
+                  <button style={pill(futilidade==="todos")} onClick={()=>setFutilidade("todos")}>Tudo</button>
+                  {(appConfig?.utilidades||["churrasco","consumo"]).map((u,i)=>(
+                    <button key={u} style={pill(futilidade===u)} onClick={()=>setFutilidade(u)}>
+                      {getUtilPalette(appConfig?.utilidades||["churrasco","consumo"],u).icon} {u}
+                    </button>
                   ))}
                 </div>
 
@@ -1150,7 +1133,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                           Escolha o destino:
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                          {LOCAIS.filter(l=>l!==detail.local).map(l=>(
+                          {(appConfig?.locais||LOCAIS).filter(l=>l!==detail.local).map(l=>(
                             <button key={l} onClick={()=>{
                               if(xferMode==="parcial"){
                                 const hasAny=Object.values(xferPesos).some(v=>parseFloat(v)>0);
@@ -1348,7 +1331,11 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 }
 
 // ─── ENTRADA ──────────────────────────────────────────────────────────────────
-function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
+function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
+  const cfgTipos  = appConfig?.tipos      || TIPOS;
+  const cfgLocais = appConfig?.locais     || LOCAIS;
+  const cfgOrigens= appConfig?.origens    || ORIGENS;
+  const cfgUtils  = appConfig?.utilidades || ["churrasco","consumo"];
   const blank = {tipo:"bovina",corte:"",origem:"",utilidade:"",pesoTotal:"",quantidadePecas:"1",
     dataEntrada:TODAY,local:"Freezer 1",status:"disponível",observacao:"",precoPago:"",precoKg:""};
   const [form,     setForm]    = useState(blank);
@@ -1482,7 +1469,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
         {/* Tipo + Corte */}
         <div style={GRID2}>
           <FSelect label="Tipo *" value={form.tipo} onChange={set("tipo")}>
-            {TIPOS.map(t=><option key={t} value={t}>{t}</option>)}
+            {cfgTipos.map(t=><option key={t} value={t}>{t}</option>)}
           </FSelect>
           <FWrap>
             <FLabel>Corte</FLabel>
@@ -1500,17 +1487,18 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
         <FWrap>
           <FLabel>Origem</FLabel>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <OrigBtn val="in natura"  label="🌿 In Natura"/>
-            <OrigBtn val="do sol"     label="☀️ Do Sol"/>
-            <OrigBtn val="temperada"  label="🌶️ Temperada"/>
+            {cfgOrigens.map(o=>(
+              <OrigBtn key={o} val={o} label={`${getOrigenPalette(cfgOrigens,o).icon} ${o}`}/>
+            ))}
           </div>
         </FWrap>
 
         <FWrap>
           <FLabel>Utilidade</FLabel>
           <div style={{display:"flex",gap:8}}>
-            <UtilBtn val="churrasco" label="🔥 Churrasco"/>
-            <UtilBtn val="consumo"  label="🍽️ Consumo"/>
+            {cfgUtils.map(u=>(
+              <UtilBtn key={u} val={u} label={`${getUtilPalette(cfgUtils,u).icon} ${u}`}/>
+            ))}
           </div>
         </FWrap>
 
@@ -1623,7 +1611,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab}) {
             <div style={GRID2}>
               <FInput label="Data de entrada" value={form.dataEntrada} onChange={set("dataEntrada")} type="date"/>
               <FSelect label="Local" value={form.local} onChange={set("local")}>
-                {LOCAIS.map(l=><option key={l} value={l}>{l}</option>)}
+                {cfgLocais.map(l=><option key={l} value={l}>{l}</option>)}
               </FSelect>
               <FInput label="Preço pago (R$)" value={form.precoPago} onChange={set("precoPago")}
                 onBlur={calcPrecoKg} type="number" step="0.01" placeholder="Ex: 149.75"
@@ -2837,10 +2825,10 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}}/>}
-        {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab}/>}
-        {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig}/>}
+        {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
+        {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
         {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField}/>}
       </div>
