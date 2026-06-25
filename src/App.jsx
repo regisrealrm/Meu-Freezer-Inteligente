@@ -529,6 +529,54 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
   const [merging,         setMerging]         = useState(false);
   const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [precoForm,       setPrecoForm]       = useState({});
+  const [showChurrascoResumo, setShowChurrascoResumo] = useState(false);
+
+  // ── Pacotes marcados para churrasco (de todos os itens) ──────────────────
+  const pacotesChurrasco = meats.flatMap(m=>
+    (m.pacotes||[])
+      .filter(p=>p.churrasco && p.status!=="consumido")
+      .map(p=>({...p, meatId:m.id, corte:m.corte||m.tipo, tipo:m.tipo, local:m.local}))
+  );
+  const totalChurrascoKg = Math.round(
+    pacotesChurrasco.reduce((s,p)=>s+p.pesoAtual,0)*1000
+  )/1000;
+
+  const togglePacoteChurrasco = (meatId, pacoteId) => {
+    const meat = meats.find(m=>m.id===meatId);
+    if(!meat) return;
+    const updatedPacotes = (meat.pacotes||[]).map(p=>
+      p.id===pacoteId ? {...p, churrasco:!p.churrasco} : p
+    );
+    onUpdate(meatId, {pacotes:updatedPacotes});
+  };
+
+  const cancelChurrasco = () => {
+    meats.forEach(m=>{
+      if((m.pacotes||[]).some(p=>p.churrasco)){
+        onUpdate(m.id, {pacotes:(m.pacotes||[]).map(p=>({...p,churrasco:false}))});
+      }
+    });
+    setShowChurrascoResumo(false);
+  };
+
+  const confirmChurrasco = () => {
+    const churrascoMeats = meats.filter(m=>(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido"));
+    churrascoMeats.forEach(m=>{
+      const cPacs = (m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido");
+      const totalRet = Math.round(cPacs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+      const updatedPacotes = (m.pacotes||[]).map(p=>{
+        if(!p.churrasco||p.status==="consumido") return {...p,churrasco:false};
+        return {...p, pesoAtual:0, status:"consumido", churrasco:false};
+      });
+      const novoTotal = Math.round(
+        updatedPacotes.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000
+      )/1000;
+      onUpdate(m.id, {pacotes:updatedPacotes, pesoTotal:novoTotal, status:novoTotal<=0?"consumido":"aberto"});
+      onRegisterExit({id:m.id, tipo:m.tipo, corte:m.corte, local:m.local,
+        pesoRetirado:totalRet, dataSaida:TODAY, motivo:"churrasco"});
+    });
+    setShowChurrascoResumo(false);
+  };
 
   const countBy     = loc  => meats.filter(m=>m.local===loc).length;
   const countByUtil = util => meats.filter(m=>m.utilidade===util).length;
@@ -1012,30 +1060,42 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                         {detail.pacotes.map((p,i)=>(
                           <div key={p.id||i} style={{display:"flex",justifyContent:"space-between",
                             alignItems:"center",padding:"7px 10px",borderRadius:8,marginBottom:4,
-                            background:p.status==="consumido"?"transparent":p.status==="aberto"?C.warning+"18":C.light,
+                            background:p.churrasco?"#FF6B3522":p.status==="consumido"?"transparent":p.status==="aberto"?C.warning+"18":C.light,
+                            border:p.churrasco?`2px solid ${C.primary}55`:"2px solid transparent",
                             opacity:p.status==="consumido"?0.4:1}}>
                             <span style={{fontSize:13,fontWeight:600,color:C.text}}>
                               Pacote {i+1}
+                              {p.churrasco&&<span style={{fontSize:11,color:C.primary}}> · 🔥 churrasco</span>}
                               {p.status==="aberto"&&<span style={{color:C.warning,fontSize:11}}> · 🔓 aberto</span>}
                               {p.status==="consumido"&&<span style={{color:C.dim,fontSize:11}}> · consumido</span>}
                             </span>
-                            {editingPacotes&&p.status!=="consumido" ? (
-                              <input style={{...inputBase,width:90,textAlign:"right",padding:"4px 8px",fontSize:13}}
-                                type="number" step="0.1" min="0"
-                                value={pacotesForm[p.id]??p.pesoAtual}
-                                onFocus={e=>e.target.select()}
-                                onChange={e=>setPacotesForm(f=>({...f,[p.id]:e.target.value}))}/>
-                            ) : (
-                              <div style={{textAlign:"right"}}>
-                                <span style={{fontWeight:800,fontSize:14,
-                                  color:p.status==="consumido"?C.dim:p.status==="aberto"?C.warning:C.primary}}>
-                                  {fmtKg(p.pesoAtual)}
-                                </span>
-                                {p.pesoAtual!==p.peso&&(
-                                  <div style={{fontSize:10,color:C.dim}}>original: {fmtKg(p.peso)}</div>
-                                )}
-                              </div>
-                            )}
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              {editingPacotes&&p.status!=="consumido" ? (
+                                <input style={{...inputBase,width:90,textAlign:"right",padding:"4px 8px",fontSize:13}}
+                                  type="number" step="0.1" min="0"
+                                  value={pacotesForm[p.id]??p.pesoAtual}
+                                  onFocus={e=>e.target.select()}
+                                  onChange={e=>setPacotesForm(f=>({...f,[p.id]:e.target.value}))}/>
+                              ) : (
+                                <div style={{textAlign:"right"}}>
+                                  <span style={{fontWeight:800,fontSize:14,
+                                    color:p.status==="consumido"?C.dim:p.status==="aberto"?C.warning:C.primary}}>
+                                    {fmtKg(p.pesoAtual)}
+                                  </span>
+                                  {p.pesoAtual!==p.peso&&(
+                                    <div style={{fontSize:10,color:C.dim}}>original: {fmtKg(p.peso)}</div>
+                                  )}
+                                </div>
+                              )}
+                              {p.status!=="consumido"&&!editingPacotes&&(
+                                <button onClick={()=>togglePacoteChurrasco(detail.id,p.id)}
+                                  style={{background:p.churrasco?C.primary+"33":C.bg,
+                                    border:`1px solid ${p.churrasco?C.primary:C.border}`,
+                                    borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14}}>
+                                  🔥
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                         {editingPacotes&&(
@@ -1858,6 +1918,98 @@ function Saida({meats,onRegister,setTab}) {
           <Btn onClick={()=>setTab("estoque")} color={C.dim}>← Voltar</Btn>
         </div>
       </Card>
+
+      {/* ── Barra flutuante de Churrasco ─────────────────────────────── */}
+      {pacotesChurrasco.length>0&&!showChurrascoResumo&&(
+        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",
+          zIndex:200,background:C.primary,borderRadius:16,padding:"12px 20px",
+          display:"flex",alignItems:"center",gap:16,
+          boxShadow:"0 4px 24px #FF6B3566",maxWidth:360,width:"calc(100% - 32px)"}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:800,fontSize:15,color:"#fff"}}>
+              🔥 {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} selecionado{pacotesChurrasco.length!==1?"s":""}
+            </div>
+            <div style={{fontSize:12,color:"#ffffffbb"}}>Total: {fmtKg(totalChurrascoKg)}</div>
+          </div>
+          <button onClick={()=>setShowChurrascoResumo(true)}
+            style={{background:"#fff",border:"none",borderRadius:10,padding:"8px 16px",
+              cursor:"pointer",color:C.primary,fontWeight:800,fontSize:13,whiteSpace:"nowrap"}}>
+            Ver resumo →
+          </button>
+        </div>
+      )}
+
+      {/* ── Tela de Resumo do Churrasco ──────────────────────────────── */}
+      {showChurrascoResumo&&(
+        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:300,overflowY:"auto",
+          padding:"16px 16px 100px"}}>
+          <div style={{maxWidth:600,margin:"0 auto"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+              <span style={{fontSize:28}}>🔥</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:20,color:C.primary}}>Churrasco</div>
+                <div style={{fontSize:13,color:C.muted}}>
+                  {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} · {fmtKg(totalChurrascoKg)} total
+                </div>
+              </div>
+            </div>
+
+            {/* Agrupado por corte */}
+            {(()=>{
+              const grupos = {};
+              pacotesChurrasco.forEach(p=>{
+                const k = p.corte;
+                if(!grupos[k]) grupos[k]={corte:p.corte,tipo:p.tipo,local:p.local,pacotes:[]};
+                grupos[k].pacotes.push(p);
+              });
+              return Object.values(grupos).map(g=>{
+                const kgGrupo = Math.round(g.pacotes.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+                return (
+                  <div key={g.corte} style={{background:C.card,border:`1px solid ${C.border}`,
+                    borderRadius:12,padding:"14px 16px",marginBottom:10,
+                    borderLeft:`4px solid ${C.primary}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:16}}>{g.corte}</div>
+                        <div style={{fontSize:12,color:C.muted,textTransform:"capitalize"}}>
+                          {g.tipo} · {g.local}
+                        </div>
+                      </div>
+                      <div style={{fontWeight:800,fontSize:18,color:C.primary}}>{fmtKg(kgGrupo)}</div>
+                    </div>
+                    {g.pacotes.map((p,i)=>(
+                      <div key={p.id} style={{display:"flex",justifyContent:"space-between",
+                        fontSize:13,color:C.muted,padding:"3px 8px",
+                        borderTop:`1px solid ${C.border}`}}>
+                        <span>Pacote {i+1}</span>
+                        <span style={{fontWeight:600,color:C.text}}>{fmtKg(p.pesoAtual)}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              });
+            })()}
+
+            {/* Rodapé com botões */}
+            <div style={{position:"fixed",bottom:0,left:0,right:0,
+              background:C.card,borderTop:`1px solid ${C.border}`,
+              padding:"16px",display:"flex",gap:12,maxWidth:632,margin:"0 auto"}}>
+              <button onClick={cancelChurrasco}
+                style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
+                  borderRadius:12,padding:"14px",cursor:"pointer",
+                  color:C.danger,fontSize:14,fontWeight:700}}>
+                ❌ Cancelar churrasco
+              </button>
+              <button onClick={confirmChurrasco}
+                style={{flex:2,background:C.primary,border:"none",
+                  borderRadius:12,padding:"14px",cursor:"pointer",
+                  color:"#fff",fontSize:14,fontWeight:800}}>
+                ✅ Confirmar saída
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
