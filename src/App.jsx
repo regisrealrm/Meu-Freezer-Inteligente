@@ -1260,7 +1260,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                                 const novoTotal = Math.round(updatedPacotes.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
                                 const totalRetirado = Math.round(pacs.reduce((s,p)=>s+(parseFloat(saidaForm.pesos?.[p.id])||0),0)*1000)/1000;
                                 onUpdate(detail.id,{pacotes:updatedPacotes,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"});
-                                onRegisterExit({id:detail.id,tipo:detail.tipo,corte:detail.corte,pesoRetirado:totalRetirado,dataSaida:saidaForm.data,motivo:saidaForm.motivo});
+                                onRegisterExit({id:detail.id,tipo:detail.tipo,corte:detail.corte,local:detail.local,pesoRetirado:totalRetirado,dataSaida:saidaForm.data,motivo:saidaForm.motivo});
                                 setShowSaida(false); setSaidaForm({});
                                 if(novoTotal<=0) closeModal();
                               }}
@@ -1468,19 +1468,21 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
       <Card>
         {/* Tipo + Corte */}
         <div style={GRID2}>
-          <FSelect label="Tipo *" value={form.tipo} onChange={set("tipo")}>
-            {cfgTipos.map(t=><option key={t} value={t}>{t}</option>)}
+          <FSelect label="Tipo *" value={form.tipo} onChange={e=>{set("tipo")(e);setForm(f=>({...f,tipo:e.target.value,corte:""}));}}>
+            {cfgTipos.length===0
+              ? <option value="">— cadastre tipos em Ajustes —</option>
+              : cfgTipos.map(t=><option key={t} value={t}>{t}</option>)
+            }
           </FSelect>
-          <FWrap>
-            <FLabel>Corte</FLabel>
-            <input list="catalog-cortes" style={inputBase}
-              value={form.corte} onChange={handleCorteChange} placeholder="Digite ou selecione..."/>
-            <datalist id="catalog-cortes">
-              {catalog.map(c=>(
-                <option key={c.key} value={c.nome}/>
-              ))}
-            </datalist>
-          </FWrap>
+          <FSelect label="Corte" value={form.corte} onChange={set("corte")}>
+            <option value="">Selecione um corte...</option>
+            {catalog.filter(c=>!form.tipo||c.tipo===form.tipo).map(c=>(
+              <option key={c.key} value={c.nome}>{c.nome}</option>
+            ))}
+            {catalog.filter(c=>!form.tipo||c.tipo===form.tipo).length===0&&form.tipo&&(
+              <option disabled>— cadastre cortes em Ajustes —</option>
+            )}
+          </FSelect>
         </div>
 
         {/* Origem */}
@@ -2135,9 +2137,7 @@ function Relatorios({meats,exits}) {
 
       {/* Histórico de transferências */}
       {(()=>{
-        const transfers = [...exits]
-          .filter(e=>e.motivo==="transferência")
-          .reverse();
+        const transfers = [...exits].filter(e=>e.motivo==="transferência").reverse();
         return (
           <Card style={{marginBottom:14}}>
             <div style={{fontWeight:700,marginBottom:10}}>🔄 Histórico de transferências ({transfers.length})</div>
@@ -2145,14 +2145,13 @@ function Relatorios({meats,exits}) {
               ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma transferência registrada.</div>
               :transfers.map(e=>(
                 <div key={e.id} style={{display:"flex",justifyContent:"space-between",
-                  alignItems:"center",padding:"7px 0",
-                  borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+                  alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
                   <div>
-                    <span style={{fontWeight:600}}>{e.carneNome}</span>
+                    <span style={{fontWeight:700}}>{e.corte||e.carneNome}</span>
+                    {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
+                      padding:"1px 6px",borderRadius:4,marginLeft:6}}>{e.tipo}</span>}
                     <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)}</span>
-                    {e.observacao&&(
-                      <span style={{fontSize:12,color:C.info}}> · {e.observacao}</span>
-                    )}
+                    {e.observacao&&<span style={{fontSize:12,color:C.info}}> · {e.observacao}</span>}
                     {e.feitorPor&&(
                       <span style={{fontSize:11,
                         background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
@@ -2199,37 +2198,83 @@ function Relatorios({meats,exits}) {
         }
       </Card>
 
-      <Card>
-        <div style={{fontWeight:700,marginBottom:10}}>📋 Histórico de saídas ({exits.filter(e=>e.motivo!=="transferência").length})</div>
-        {exits.filter(e=>e.motivo!=="transferência").length===0
-          ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma saída registrada.</div>
-          :[...exits].filter(e=>e.motivo!=="transferência").reverse().map(e=>(
-            <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
-              <div>
-                <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
-                {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
-                  padding:"1px 6px",borderRadius:4,marginLeft:6,textTransform:"capitalize"}}>{e.tipo}</span>}
-                <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
-                <span style={{fontSize:12,color:
-                  e.motivo==="churrasco"?C.primary:
-                  e.motivo==="descarte"?C.danger:
-                  e.motivo==="doação"?C.info:C.success,fontWeight:600}}>
-                  {e.motivo}
-                </span>
-                {e.eventoVinculado&&<span style={{fontSize:11,color:C.dim}}> · {e.eventoVinculado}</span>}
-                {e.feitorPor&&(
-                  <span style={{fontSize:11,background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
-                    color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
-                    padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
-                    {e.feitorPor}
-                  </span>
-                )}
-              </div>
-              <strong style={{color:C.danger}}>−{fmtKg(e.pesoRetirado)}</strong>
+      {/* Histórico de saídas — com filtro por freezer */}
+      {(()=>{
+        const saidas = exits.filter(e=>e.motivo!=="transferência");
+        const locaisComSaida = [...new Set(saidas.map(e=>e.local).filter(Boolean))];
+        return (
+          <Card>
+            <div style={{fontWeight:700,marginBottom:10}}>
+              📋 Histórico de saídas ({saidas.length})
             </div>
-          ))
-        }
-      </Card>
+            {saidas.length===0
+              ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma saída registrada.</div>
+              : (
+                <>
+                  {/* Saídas por freezer */}
+                  {locaisComSaida.length>1&&locaisComSaida.map(local=>{
+                    const items = [...saidas].filter(e=>e.local===local).reverse();
+                    if(!items.length) return null;
+                    const totalLocal = items.reduce((s,e)=>s+e.pesoRetirado,0);
+                    return (
+                      <div key={local} style={{marginBottom:16}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.info,
+                          background:C.light,borderRadius:8,padding:"6px 12px",
+                          marginBottom:8,display:"flex",justifyContent:"space-between"}}>
+                          <span>📍 {local}</span>
+                          <span style={{color:C.danger}}>−{fmtKg(totalLocal)}</span>
+                        </div>
+                        {items.map(e=>(
+                          <div key={e.id} style={{display:"flex",justifyContent:"space-between",
+                            alignItems:"center",padding:"6px 8px",
+                            borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+                            <div>
+                              <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
+                              <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
+                              <span style={{fontSize:12,fontWeight:600,color:
+                                e.motivo==="churrasco"?C.primary:
+                                e.motivo==="descarte"?C.danger:C.success}}>
+                                {e.motivo}
+                              </span>
+                            </div>
+                            <strong style={{color:C.danger}}>−{fmtKg(e.pesoRetirado)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {/* Saídas sem local ou lista geral (se só 1 local) */}
+                  {locaisComSaida.length<=1&&[...saidas].reverse().map(e=>(
+                    <div key={e.id} style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"center",padding:"8px 0",
+                      borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+                      <div>
+                        <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
+                        {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
+                          padding:"1px 6px",borderRadius:4,marginLeft:6}}>{e.tipo}</span>}
+                        <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
+                        <span style={{fontSize:12,fontWeight:600,color:
+                          e.motivo==="churrasco"?C.primary:
+                          e.motivo==="descarte"?C.danger:C.success}}>
+                          {e.motivo}
+                        </span>
+                        {e.feitorPor&&(
+                          <span style={{fontSize:11,background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
+                            color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
+                            padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
+                            {e.feitorPor}
+                          </span>
+                        )}
+                      </div>
+                      <strong style={{color:C.danger}}>−{fmtKg(e.pesoRetirado)}</strong>
+                    </div>
+                  ))}
+                </>
+              )
+            }
+          </Card>
+        );
+      })()}
     </div>
   );
 }
@@ -2245,6 +2290,8 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
   const [newItem,       setNewItem]        = useState("");
   const [editIdx,       setEditIdx]        = useState(null);
   const [editVal,       setEditVal]        = useState("");
+  const [newCorte,      setNewCorte]       = useState("");
+  const [newCorteType,  setNewCorteType]   = useState("");
 
   const sections = [
     {key:"tipos",      title:"Tipos de carne",          icon:"🥩", color:C.primary,  field:"tipo"},
@@ -2268,6 +2315,21 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
 
   const deleteItem = (key,idx) => {
     onUpdateConfig({...config,[key]:(config[key]||[]).filter((_,i)=>i!==idx)});
+  };
+
+  const clearSection = (key) => {
+    if(!window.confirm(`Limpar todos os itens de "${key}"?`)) return;
+    onUpdateConfig({...config,[key]:[]});
+  };
+
+  const addCorte = () => {
+    const nome = newCorte.trim();
+    if(!nome) return alert("Informe o nome do corte.");
+    if(!newCorteType) return alert("Selecione o tipo.");
+    const key = `${newCorteType}:${nome.toLowerCase()}`;
+    if(catalog.some(c=>c.key===key)) return alert("Corte já existe para este tipo.");
+    onUpdateCatalog([...catalog, {id:uid(), nome, tipo:newCorteType, key}]);
+    setNewCorte(""); setNewCorteType("");
   };
 
   // Salva edição de seção — propaga renomeação para todos os itens
@@ -2361,7 +2423,16 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
                 {(config[s.key]||[]).length}
               </span>
             </div>
-            <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {(config[s.key]||[]).length>0&&editingSection===s.key&&(
+                <button onClick={e=>{e.stopPropagation();clearSection(s.key);}}
+                  style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
+                    padding:"2px 8px",cursor:"pointer",color:C.danger,fontSize:11}}>
+                  🗑️ Limpar
+                </button>
+              )}
+              <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
+            </div>
           </button>
 
           {editingSection===s.key&&(
@@ -2399,7 +2470,16 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
               {catalog.length}
             </span>
           </div>
-          <span style={{color:C.muted}}>{editingSection==="cortes"?"▲":"▼"}</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {catalog.length>0&&editingSection==="cortes"&&(
+              <button onClick={e=>{e.stopPropagation();if(window.confirm("Limpar todos os cortes?"))onUpdateCatalog([]);}}
+                style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
+                  padding:"2px 8px",cursor:"pointer",color:C.danger,fontSize:11}}>
+                🗑️ Limpar
+              </button>
+            )}
+            <span style={{color:C.muted}}>{editingSection==="cortes"?"▲":"▼"}</span>
+          </div>
         </button>
         {editingSection==="cortes"&&(
           <div style={{marginTop:12}}>
@@ -2411,6 +2491,21 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
                 onSave={()=>saveCorteEdit(i)}
                 onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==i))}/>
             ))}
+            {/* Adicionar novo corte com seleção de tipo */}
+            <div style={{marginTop:10,display:"flex",gap:8,flexWrap:"wrap"}}>
+              <select style={{...inputBase,flex:"1 1 100px",padding:"9px 10px",fontSize:13}}
+                value={newCorteType} onChange={e=>setNewCorteType(e.target.value)}>
+                <option value="">Tipo...</option>
+                {(config.tipos||[]).map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+              <input style={{...inputBase,flex:"2 1 140px",padding:"9px 12px",fontSize:13}}
+                placeholder="Nome do corte..."
+                value={newCorte} onChange={e=>setNewCorte(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&addCorte()}/>
+              <button onClick={addCorte}
+                style={{background:C.primary+"22",border:`1px solid ${C.primary}55`,borderRadius:8,
+                  padding:"9px 14px",cursor:"pointer",color:C.primary,fontSize:13,fontWeight:700}}>+</button>
+            </div>
           </div>
         )}
       </Card>
@@ -2593,10 +2688,7 @@ export default function App() {
     };
 
     setMeats(p => [...p, newMeat]);
-
-    const nome = (meat.corte || meat.tipo).trim();
-    const key  = `${meat.tipo}:${nome.toLowerCase()}`;
-    setCatalog(p => p.some(c=>c.key===key) ? p : [...p, {id:uid(), nome, tipo:meat.tipo, key}]);
+    // Cortes só são adicionados pelo menu Ajustes — não aqui
   };
 
   const addToExisting = (id, pesoAdd, qtdAdd, precoAdd, pacotesPesos) => {
