@@ -192,7 +192,7 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts,appConfig}) {
+function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
@@ -372,6 +372,58 @@ function Dashboard({meats,exits,alerts,appConfig}) {
         </>
       )}
 
+      {/* ── Card Preparar Churrasco ─────────────────────── */}
+      {pacotesChurrasco?.length>0&&(
+        <div style={{background:"#2A1000",border:`2px solid ${C.primary}`,borderRadius:14,
+          padding:"14px 16px",marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:16,color:C.primary}}>🔥 Preparar Churrasco</div>
+              <div style={{fontSize:12,color:C.muted}}>
+                {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} · {fmtKg(totalChurrascoKg)} total
+              </div>
+            </div>
+          </div>
+          {/* Lista agrupada por corte */}
+          {(()=>{
+            const grupos={};
+            pacotesChurrasco.forEach(p=>{
+              if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,pacotes:[]};
+              grupos[p.corte].pacotes.push(p);
+            });
+            return Object.values(grupos).map(g=>{
+              const kg=Math.round(g.pacotes.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+              return (
+                <div key={g.corte} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"8px 10px",borderRadius:8,marginBottom:6,
+                  background:C.primary+"18"}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</div>
+                    <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>
+                      {g.tipo} · 📍 {g.local}
+                      {g.pacotes.length>1&&<span> · {g.pacotes.length} pacotes</span>}
+                    </div>
+                  </div>
+                  <div style={{fontWeight:800,fontSize:16,color:C.primary}}>{fmtKg(kg)}</div>
+                </div>
+              );
+            });
+          })()}
+          <div style={{display:"flex",gap:10,marginTop:10}}>
+            <button onClick={onCancelChurrasco}
+              style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
+                borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
+              ❌ Cancelar
+            </button>
+            <button onClick={onConfirmChurrasco}
+              style={{flex:2,background:C.primary,border:"none",
+                borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
+              ✅ Confirmar saída
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Expandable panels ────────────────────────── */}
       {open==="estoque"&&(
         <Card style={{borderTop:`3px solid ${C.primary}`}}>
@@ -509,7 +561,7 @@ function Dashboard({meats,exits,alerts,appConfig}) {
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig}) {
+function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig,onTogglePacoteChurrasco}) {
   const [flocal,     setFlocal]     = useState("todos");
   const [futilidade,  setFutilidade]  = useState("todos");
   const [forigem,     setForigem]     = useState("todos");
@@ -529,54 +581,6 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
   const [merging,         setMerging]         = useState(false);
   const [confirmDelete,   setConfirmDelete]   = useState(false);
   const [precoForm,       setPrecoForm]       = useState({});
-  const [showChurrascoResumo, setShowChurrascoResumo] = useState(false);
-
-  // ── Pacotes marcados para churrasco (de todos os itens) ──────────────────
-  const pacotesChurrasco = meats.flatMap(m=>
-    (m.pacotes||[])
-      .filter(p=>p.churrasco && p.status!=="consumido")
-      .map(p=>({...p, meatId:m.id, corte:m.corte||m.tipo, tipo:m.tipo, local:m.local}))
-  );
-  const totalChurrascoKg = Math.round(
-    pacotesChurrasco.reduce((s,p)=>s+p.pesoAtual,0)*1000
-  )/1000;
-
-  const togglePacoteChurrasco = (meatId, pacoteId) => {
-    const meat = meats.find(m=>m.id===meatId);
-    if(!meat) return;
-    const updatedPacotes = (meat.pacotes||[]).map(p=>
-      p.id===pacoteId ? {...p, churrasco:!p.churrasco} : p
-    );
-    onUpdate(meatId, {pacotes:updatedPacotes});
-  };
-
-  const cancelChurrasco = () => {
-    meats.forEach(m=>{
-      if((m.pacotes||[]).some(p=>p.churrasco)){
-        onUpdate(m.id, {pacotes:(m.pacotes||[]).map(p=>({...p,churrasco:false}))});
-      }
-    });
-    setShowChurrascoResumo(false);
-  };
-
-  const confirmChurrasco = () => {
-    const churrascoMeats = meats.filter(m=>(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido"));
-    churrascoMeats.forEach(m=>{
-      const cPacs = (m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido");
-      const totalRet = Math.round(cPacs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
-      const updatedPacotes = (m.pacotes||[]).map(p=>{
-        if(!p.churrasco||p.status==="consumido") return {...p,churrasco:false};
-        return {...p, pesoAtual:0, status:"consumido", churrasco:false};
-      });
-      const novoTotal = Math.round(
-        updatedPacotes.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000
-      )/1000;
-      onUpdate(m.id, {pacotes:updatedPacotes, pesoTotal:novoTotal, status:novoTotal<=0?"consumido":"aberto"});
-      onRegisterExit({id:m.id, tipo:m.tipo, corte:m.corte, local:m.local,
-        pesoRetirado:totalRet, dataSaida:TODAY, motivo:"churrasco"});
-    });
-    setShowChurrascoResumo(false);
-  };
 
   const countBy     = loc  => meats.filter(m=>m.local===loc).length;
   const countByUtil = util => meats.filter(m=>m.utilidade===util).length;
@@ -1088,7 +1092,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                                 </div>
                               )}
                               {p.status!=="consumido"&&!editingPacotes&&(
-                                <button onClick={()=>togglePacoteChurrasco(detail.id,p.id)}
+                                <button onClick={()=>onTogglePacoteChurrasco(detail.id,p.id)}
                                   style={{background:p.churrasco?C.primary+"33":C.bg,
                                     border:`1px solid ${p.churrasco?C.primary:C.border}`,
                                     borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14}}>
@@ -1918,98 +1922,6 @@ function Saida({meats,onRegister,setTab}) {
           <Btn onClick={()=>setTab("estoque")} color={C.dim}>← Voltar</Btn>
         </div>
       </Card>
-
-      {/* ── Barra flutuante de Churrasco ─────────────────────────────── */}
-      {pacotesChurrasco.length>0&&!showChurrascoResumo&&(
-        <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",
-          zIndex:200,background:C.primary,borderRadius:16,padding:"12px 20px",
-          display:"flex",alignItems:"center",gap:16,
-          boxShadow:"0 4px 24px #FF6B3566",maxWidth:360,width:"calc(100% - 32px)"}}>
-          <div style={{flex:1}}>
-            <div style={{fontWeight:800,fontSize:15,color:"#fff"}}>
-              🔥 {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} selecionado{pacotesChurrasco.length!==1?"s":""}
-            </div>
-            <div style={{fontSize:12,color:"#ffffffbb"}}>Total: {fmtKg(totalChurrascoKg)}</div>
-          </div>
-          <button onClick={()=>setShowChurrascoResumo(true)}
-            style={{background:"#fff",border:"none",borderRadius:10,padding:"8px 16px",
-              cursor:"pointer",color:C.primary,fontWeight:800,fontSize:13,whiteSpace:"nowrap"}}>
-            Ver resumo →
-          </button>
-        </div>
-      )}
-
-      {/* ── Tela de Resumo do Churrasco ──────────────────────────────── */}
-      {showChurrascoResumo&&(
-        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:300,overflowY:"auto",
-          padding:"16px 16px 100px"}}>
-          <div style={{maxWidth:600,margin:"0 auto"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-              <span style={{fontSize:28}}>🔥</span>
-              <div>
-                <div style={{fontWeight:800,fontSize:20,color:C.primary}}>Churrasco</div>
-                <div style={{fontSize:13,color:C.muted}}>
-                  {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} · {fmtKg(totalChurrascoKg)} total
-                </div>
-              </div>
-            </div>
-
-            {/* Agrupado por corte */}
-            {(()=>{
-              const grupos = {};
-              pacotesChurrasco.forEach(p=>{
-                const k = p.corte;
-                if(!grupos[k]) grupos[k]={corte:p.corte,tipo:p.tipo,local:p.local,pacotes:[]};
-                grupos[k].pacotes.push(p);
-              });
-              return Object.values(grupos).map(g=>{
-                const kgGrupo = Math.round(g.pacotes.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
-                return (
-                  <div key={g.corte} style={{background:C.card,border:`1px solid ${C.border}`,
-                    borderRadius:12,padding:"14px 16px",marginBottom:10,
-                    borderLeft:`4px solid ${C.primary}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                      <div>
-                        <div style={{fontWeight:800,fontSize:16}}>{g.corte}</div>
-                        <div style={{fontSize:12,color:C.muted,textTransform:"capitalize"}}>
-                          {g.tipo} · {g.local}
-                        </div>
-                      </div>
-                      <div style={{fontWeight:800,fontSize:18,color:C.primary}}>{fmtKg(kgGrupo)}</div>
-                    </div>
-                    {g.pacotes.map((p,i)=>(
-                      <div key={p.id} style={{display:"flex",justifyContent:"space-between",
-                        fontSize:13,color:C.muted,padding:"3px 8px",
-                        borderTop:`1px solid ${C.border}`}}>
-                        <span>Pacote {i+1}</span>
-                        <span style={{fontWeight:600,color:C.text}}>{fmtKg(p.pesoAtual)}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              });
-            })()}
-
-            {/* Rodapé com botões */}
-            <div style={{position:"fixed",bottom:0,left:0,right:0,
-              background:C.card,borderTop:`1px solid ${C.border}`,
-              padding:"16px",display:"flex",gap:12,maxWidth:632,margin:"0 auto"}}>
-              <button onClick={cancelChurrasco}
-                style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
-                  borderRadius:12,padding:"14px",cursor:"pointer",
-                  color:C.danger,fontSize:14,fontWeight:700}}>
-                ❌ Cancelar churrasco
-              </button>
-              <button onClick={confirmChurrasco}
-                style={{flex:2,background:C.primary,border:"none",
-                  borderRadius:12,padding:"14px",cursor:"pointer",
-                  color:"#fff",fontSize:14,fontWeight:800}}>
-                ✅ Confirmar saída
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -2842,6 +2754,52 @@ export default function App() {
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
   const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
 
+  // ── CHURRASCO ──────────────────────────────────────────────────────────────
+  const togglePacoteChurrasco = (meatId, pacoteId) => {
+    setMeats(prev=>prev.map(m=>{
+      if(m.id!==meatId) return m;
+      const pacs = (m.pacotes||[]).map(p=>p.id===pacoteId?{...p,churrasco:!p.churrasco}:p);
+      return {...m, pacotes:pacs};
+    }));
+  };
+
+  const cancelChurrasco = () => {
+    setMeats(prev=>prev.map(m=>({
+      ...m,
+      pacotes:(m.pacotes||[]).map(p=>({...p,churrasco:false}))
+    })));
+  };
+
+  const confirmChurrasco = () => {
+    const churrascoMeats = meats.filter(m=>(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido"));
+    const newMeats = meats.map(m=>{
+      if(!(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido")) return m;
+      const updatedPacs = (m.pacotes||[]).map(p=>{
+        if(!p.churrasco||p.status==="consumido") return {...p,churrasco:false};
+        return {...p,pesoAtual:0,status:"consumido",churrasco:false};
+      });
+      const novoTotal = Math.round(updatedPacs.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+      return {...m,pacotes:updatedPacs,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"};
+    });
+    setMeats(newMeats);
+    churrascoMeats.forEach(m=>{
+      const cPacs=(m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido");
+      const totalRet=Math.round(cPacs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+      setExits(prev=>[...prev,{
+        id:uid(), tipo:m.tipo, corte:m.corte, local:m.local,
+        carneNome:m.corte||m.tipo, pesoRetirado:totalRet,
+        dataSaida:TODAY, motivo:"churrasco", feitorPor:currentUser
+      }]);
+    });
+  };
+
+  // Pacotes marcados para churrasco
+  const pacotesChurrasco = meats.flatMap(m=>
+    (m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido")
+      .map(p=>({...p,meatId:m.id,corte:m.corte||m.tipo,tipo:m.tipo,local:m.local}))
+  );
+  const totalChurrascoKg = Math.round(pacotesChurrasco.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+
   // Renomeia campo em TODOS os itens do estoque de uma vez (Ajustes)
   const renameMeatField = (field, oldVal, newVal) => {
     if(!field||!oldVal||oldVal===newVal) return;
@@ -3049,8 +3007,8 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
