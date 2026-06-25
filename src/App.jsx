@@ -2421,54 +2421,46 @@ export default function App() {
 
   const lastSaved  = useRef("");
   const localTs    = useRef(0);
-  const prevConfig = useRef(null); // para detectar renomeações no appConfig
-  const prevCatalog= useRef(null); // para detectar renomeações no catálogo
 
-  // ── PROPAGAÇÃO AUTOMÁTICA: quando appConfig muda, atualiza meats ─────────
-  // Este useEffect é a fonte única de verdade para renomear campos em meats
-  useEffect(()=>{
-    if(!loaded) return;
-    const prev = prevConfig.current;
-    if(!prev) { prevConfig.current = appConfig; return; }
-
+  // ── ATUALIZA CONFIG + PROPAGA RENOMEAÇÕES PARA MEATS (síncrono) ───────────
+  // Compara novo config com atual, detecta renomeações e atualiza meats na hora
+  const updateAppConfig = (newConfig) => {
     const fieldMap = {tipos:"tipo", locais:"local", origens:"origem", utilidades:"utilidade"};
-    let updated = null; // só aloca novo array se realmente mudou
-
+    let updatedMeats = meats;
+    let changed = false;
     for(const [key, field] of Object.entries(fieldMap)) {
-      const oldArr = prev[key] || [];
-      const newArr = appConfig[key] || [];
-      if(oldArr.length !== newArr.length) continue; // adição/remoção, não renomeação
+      const oldArr = appConfig[key] || [];
+      const newArr = newConfig[key] || [];
+      if(oldArr.length !== newArr.length) continue;
       for(let i=0; i<oldArr.length; i++) {
         if(oldArr[i] !== newArr[i]) {
-          // Renomeação detectada: oldArr[i] → newArr[i]
-          if(!updated) updated = [...meats];
-          updated = updated.map(m => m[field]===oldArr[i] ? {...m,[field]:newArr[i]} : m);
+          updatedMeats = updatedMeats.map(m =>
+            m[field]===oldArr[i] ? {...m,[field]:newArr[i]} : m
+          );
+          changed = true;
         }
       }
     }
+    setAppConfig(newConfig);
+    if(changed) setMeats(updatedMeats);
+  };
 
-    if(updated) setMeats(updated);
-    prevConfig.current = appConfig;
-  },[appConfig, loaded]); // eslint-disable-line
-
-  // ── PROPAGAÇÃO: quando catálogo muda, renomeia cortes em meats ───────────
-  useEffect(()=>{
-    if(!loaded) return;
-    const prev = prevCatalog.current;
-    if(!prev) { prevCatalog.current = catalog; return; }
-
-    let updated = null;
-    for(const newEntry of catalog) {
-      const prevEntry = prev.find(e=>e.id===newEntry.id);
-      if(prevEntry && prevEntry.nome !== newEntry.nome) {
-        if(!updated) updated = [...meats];
-        updated = updated.map(m => m.corte===prevEntry.nome ? {...m,corte:newEntry.nome} : m);
+  // ── ATUALIZA CATÁLOGO + PROPAGA RENOMEAÇÕES DE CORTE PARA MEATS ───────────
+  const updateCatalog = (newCatalog) => {
+    let updatedMeats = meats;
+    let changed = false;
+    for(const newEntry of newCatalog) {
+      const oldEntry = catalog.find(e=>e.id===newEntry.id);
+      if(oldEntry && oldEntry.nome !== newEntry.nome) {
+        updatedMeats = updatedMeats.map(m =>
+          m.corte===oldEntry.nome ? {...m,corte:newEntry.nome} : m
+        );
+        changed = true;
       }
     }
-
-    if(updated) setMeats(updated);
-    prevCatalog.current = catalog;
-  },[catalog, loaded]); // eslint-disable-line
+    setCatalog(newCatalog);
+    if(changed) setMeats(updatedMeats);
+  };
 
   // ── LOAD: localStorage primeiro, Firebase só se for mais recente ─────────
   useEffect(()=>{
@@ -2877,7 +2869,7 @@ export default function App() {
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} appConfig={appConfig}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} onUpdateConfig={updateAppConfig} onUpdateCatalog={updateCatalog}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
