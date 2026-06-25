@@ -1476,10 +1476,10 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
           </FSelect>
           <FSelect label="Corte" value={form.corte} onChange={set("corte")}>
             <option value="">Selecione um corte...</option>
-            {catalog.filter(c=>!form.tipo||c.tipo===form.tipo).map(c=>(
+            {catalog.map(c=>(
               <option key={c.key} value={c.nome}>{c.nome}</option>
             ))}
-            {catalog.filter(c=>!form.tipo||c.tipo===form.tipo).length===0&&form.tipo&&(
+            {catalog.length===0&&(
               <option disabled>— cadastre cortes em Ajustes —</option>
             )}
           </FSelect>
@@ -2324,12 +2324,11 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
 
   const addCorte = () => {
     const nome = newCorte.trim();
-    if(!nome) return alert("Informe o nome do corte.");
-    if(!newCorteType) return alert("Selecione o tipo.");
-    const key = `${newCorteType}:${nome.toLowerCase()}`;
-    if(catalog.some(c=>c.key===key)) return alert("Corte já existe para este tipo.");
-    onUpdateCatalog([...catalog, {id:uid(), nome, tipo:newCorteType, key}]);
-    setNewCorte(""); setNewCorteType("");
+    if(!nome) return;
+    const key = nome.toLowerCase();
+    if(catalog.some(c=>c.key===key)) return alert("Corte já existe.");
+    onUpdateCatalog([...catalog, {id:uid(), nome, tipo:"", key}]);
+    setNewCorte("");
   };
 
   // Salva edição de seção — propaga renomeação para todos os itens
@@ -2423,15 +2422,7 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
                 {(config[s.key]||[]).length}
               </span>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {(config[s.key]||[]).length>0&&editingSection===s.key&&(
-                <button onClick={e=>{e.stopPropagation();clearSection(s.key);}}
-                  style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
-                    padding:"2px 8px",cursor:"pointer",color:C.danger,fontSize:11}}>
-                  🗑️ Limpar
-                </button>
-              )}
-              <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
+            <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
             </div>
           </button>
 
@@ -2470,16 +2461,7 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
               {catalog.length}
             </span>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {catalog.length>0&&editingSection==="cortes"&&(
-              <button onClick={e=>{e.stopPropagation();if(window.confirm("Limpar todos os cortes?"))onUpdateCatalog([]);}}
-                style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
-                  padding:"2px 8px",cursor:"pointer",color:C.danger,fontSize:11}}>
-                🗑️ Limpar
-              </button>
-            )}
-            <span style={{color:C.muted}}>{editingSection==="cortes"?"▲":"▼"}</span>
-          </div>
+          <span style={{color:C.muted}}>{editingSection==="cortes"?"▲":"▼"}</span>
         </button>
         {editingSection==="cortes"&&(
           <div style={{marginTop:12}}>
@@ -2491,14 +2473,9 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
                 onSave={()=>saveCorteEdit(i)}
                 onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==i))}/>
             ))}
-            {/* Adicionar novo corte com seleção de tipo */}
-            <div style={{marginTop:10,display:"flex",gap:8,flexWrap:"wrap"}}>
-              <select style={{...inputBase,flex:"1 1 100px",padding:"9px 10px",fontSize:13}}
-                value={newCorteType} onChange={e=>setNewCorteType(e.target.value)}>
-                <option value="">Tipo...</option>
-                {(config.tipos||[]).map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-              <input style={{...inputBase,flex:"2 1 140px",padding:"9px 12px",fontSize:13}}
+            {/* Adicionar novo corte — independente de tipo */}
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
                 placeholder="Nome do corte..."
                 value={newCorte} onChange={e=>setNewCorte(e.target.value)}
                 onKeyDown={e=>e.key==="Enter"&&addCorte()}/>
