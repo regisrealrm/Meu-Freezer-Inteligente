@@ -1714,8 +1714,6 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
                 type="number" step="0.01" placeholder="Calculado auto"
                 onFocus={e=>e.target.select()}/>
             </div>
-            <FInput label="Observações" value={form.observacao} onChange={set("observacao")}
-              placeholder="Temperada, fatiada, para churrasco..."/>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
               <Btn onClick={submit}>✅ Cadastrar item</Btn>
               <Btn onClick={()=>setTab("estoque")} color={C.dim}>← Voltar</Btn>
@@ -2898,7 +2896,7 @@ export default function App() {
     {id:"dashboard", e:"🏠", l:"Painel"},
     {id:"estoque",   e:"📦", l:"Estoque"},
     {id:"entrada",   e:"➕", l:"Entrada"},
-    {id:"churras",   e:"🔥", l:"Churrasco"},
+    {id:"churras",   e:"🔥", l:"Churrascômetro"},
     {id:"relatorios",e:"📊", l:"Relatórios"},
     {id:"config",    e:"⚙️", l:"Ajustes"},
   ];
