@@ -2416,7 +2416,6 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
               </span>
             </div>
             <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
-            </div>
           </button>
 
           {editingSection===s.key&&(
