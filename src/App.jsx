@@ -522,6 +522,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
   const [saidaForm,   setSaidaForm]   = useState({});
   const [transferOk,  setTransferOk]  = useState("");
   const [editingOrigem,   setEditingOrigem]   = useState(false);
+  const [editingLocal,    setEditingLocal]    = useState(false);
   const [editingPreco,    setEditingPreco]    = useState(false);
   const [editingUtilidade,setEditingUtilidade]= useState(false);
   const [editingPacotes,  setEditingPacotes]  = useState(false);
@@ -547,13 +548,13 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 
   const openDetail = (id) => {
     setSelected(id); setShowXfer(false); setTransferOk(""); setShowSaida(false); setSaidaForm({});
-    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
-    setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
+    setEditingOrigem(false); setEditingLocal(false); setEditingPreco(false);
+    setEditingUtilidade(false); setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
   const closeModal = () => {
     setSelected(null); setShowXfer(false); setTransferOk(""); setShowSaida(false); setSaidaForm({});
-    setEditingOrigem(false); setEditingPreco(false); setEditingUtilidade(false);
-    setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
+    setEditingOrigem(false); setEditingLocal(false); setEditingPreco(false);
+    setEditingUtilidade(false); setEditingPacotes(false); setMerging(false); setConfirmDelete(false);
   };
 
   const [xferMode,    setXferMode]    = useState("tudo"); // "tudo"|"parcial"
@@ -812,7 +813,6 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                   <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                       {[
-                        {icon:"📍", label:"Local",          value:detail.local},
                         {icon:"📅", label:"Data de entrada", value:`${fmtDate(detail.dataEntrada)} · ${diffDays(detail.dataEntrada,TODAY)}d`},
                         detail.corte&&{icon:"🔪", label:"Corte", value:detail.corte},
                         {icon:"⚖️", label:"Peso total", value:fmtKg(detail.pesoTotal)},
@@ -825,6 +825,38 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                           <div style={{fontWeight:600,fontSize:14,color:C.text}}>{row.value}</div>
                         </div>
                       ))}
+                    </div>
+
+                    {/* Local — editável */}
+                    <div style={{marginTop:8,background:C.light,borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editingLocal?10:0}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:3}}>📍 Local</div>
+                          {!editingLocal&&(
+                            <div style={{fontWeight:600,fontSize:14,color:C.text}}>{detail.local||"—"}</div>
+                          )}
+                        </div>
+                        <button onClick={()=>setEditingLocal(e=>!e)}
+                          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:6,
+                            padding:"3px 9px",cursor:"pointer",fontSize:11,color:C.muted}}>
+                          {editingLocal?"✕ Fechar":"✏️ Editar"}
+                        </button>
+                      </div>
+                      {editingLocal&&(
+                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                          {(appConfig?.locais||LOCAIS).map(l=>(
+                            <button key={l} onClick={()=>{ onUpdate(detail.id,{local:l}); setEditingLocal(false); }}
+                              style={{padding:"10px 14px",borderRadius:8,cursor:"pointer",
+                                fontSize:13,fontWeight:600,textAlign:"left",
+                                background:detail.local===l?C.info+"22":C.bg,
+                                border:`2px solid ${detail.local===l?C.info:C.border}`,
+                                color:detail.local===l?C.info:C.text}}>
+                              📍 {l} {detail.local===l&&"← atual"}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     </div>
 
                     {/* Origem — editável */}
