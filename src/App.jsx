@@ -1336,8 +1336,8 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
   const cfgLocais = appConfig?.locais     || LOCAIS;
   const cfgOrigens= appConfig?.origens    || ORIGENS;
   const cfgUtils  = appConfig?.utilidades || ["churrasco","consumo"];
-  const blank = {tipo:"bovina",corte:"",origem:"",utilidade:"",pesoTotal:"",quantidadePecas:"1",
-    dataEntrada:TODAY,local:"Freezer 1",status:"disponível",observacao:"",precoPago:"",precoKg:""};
+  const blank = {tipo:cfgTipos[0]||"bovina",corte:"",origem:"",utilidade:"",pesoTotal:"",quantidadePecas:"1",
+    dataEntrada:TODAY,local:cfgLocais[0]||"Freezer 1",status:"disponível",observacao:"",precoPago:"",precoKg:""};
   const [form,     setForm]    = useState(blank);
   const [ok,       setOk]      = useState(false);
   const [addMode,  setAddMode] = useState(null);
