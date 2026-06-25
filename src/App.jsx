@@ -1490,7 +1490,17 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
     const pacotesPesos = qtd>1
       ? pesosInd.map(p=>parseFloat(p))
       : [parseFloat(form.pesoTotal)];
-    const totalPeso = pacotesPesos.reduce((s,p)=>s+p,0);
+    const totalPeso = Math.round(pacotesPesos.reduce((s,p)=>s+p,0)*1000)/1000;
+
+    if(!window.confirm(
+      `Confirmar cadastro?\n\n` +
+      `• ${form.tipo}${form.corte?" — "+form.corte:""}\n` +
+      `• ${qtd} pacote${qtd>1?"s":""}\n` +
+      `• Peso total: ${totalPeso.toFixed(3).replace(".",",")} kg\n` +
+      `• Local: ${form.local}\n` +
+      (form.precoPago?`• Preço: R$ ${parseFloat(form.precoPago).toFixed(2)}\n`:"") +
+      `\nEstá correto?`
+    )) return;
 
     // Auto-merge: tipo + corte + origem iguais → vira mais pacote(s)
     if(exactMatch) {
@@ -1501,11 +1511,11 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
     }
 
     onAdd({...form,
-      pesoTotal: pacotesPesos[0],
+      pesoTotal:       totalPeso,
       pacotesPesos,
       quantidadePecas: qtd,
-      precoPago: parseFloat(form.precoPago)||null,
-      precoKg:   parseFloat(form.precoKg)||null,
+      precoPago:       parseFloat(form.precoPago)||null,
+      precoKg:         parseFloat(form.precoKg)||null,
     });
     setForm(blank); setAddMode(null); setPesosInd([""]);
     setOk(true); setTimeout(()=>setOk(false),3000);
@@ -1662,7 +1672,8 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
               {qtd===1&&(
                 <FInput label="Peso total (kg) *"
                   value={form.pesoTotal} onChange={set("pesoTotal")} onFocus={e=>e.target.select()}
-                  type="number" step="0.1" min="0.1" placeholder="Ex: 1.5"/>
+                  type="number" step="0.001" min="0.001" placeholder="Ex: 1.500"
+                  autoComplete="off"/>
               )}
             </div>
 
