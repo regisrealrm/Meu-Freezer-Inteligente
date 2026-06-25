@@ -1360,12 +1360,6 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
   };
 
   // Capitaliza primeira letra do corte
-  const handleCorteChange = (e) => {
-    const val = e.target.value;
-    const cap = val.charAt(0).toUpperCase() + val.slice(1);
-    setForm(f=>({...f,corte:cap}));
-  };
-
   const calcPrecoKg = () => {
     const total = qtd>1
       ? pesosInd.reduce((s,p)=>s+(parseFloat(p)||0),0)
@@ -1468,7 +1462,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
       <Card>
         {/* Tipo + Corte */}
         <div style={GRID2}>
-          <FSelect label="Tipo *" value={form.tipo} onChange={e=>{set("tipo")(e);setForm(f=>({...f,tipo:e.target.value,corte:""}));}}>
+          <FSelect label="Tipo *" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value,corte:""}))}>
             {cfgTipos.length===0
               ? <option value="">— cadastre tipos em Ajustes —</option>
               : cfgTipos.map(t=><option key={t} value={t}>{t}</option>)
@@ -2291,7 +2285,6 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
   const [editIdx,       setEditIdx]        = useState(null);
   const [editVal,       setEditVal]        = useState("");
   const [newCorte,      setNewCorte]       = useState("");
-  const [newCorteType,  setNewCorteType]   = useState("");
 
   const sections = [
     {key:"tipos",      title:"Tipos de carne",          icon:"🥩", color:C.primary,  field:"tipo"},
