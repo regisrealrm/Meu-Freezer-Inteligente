@@ -192,7 +192,7 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco}) {
+function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,onTogglePacoteChurrasco}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
@@ -384,7 +384,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               </div>
             </div>
           </div>
-          {/* Lista agrupada por corte */}
+
+          {/* Lista por corte com opção de desmarcar cada pacote */}
           {(()=>{
             const grupos={};
             pacotesChurrasco.forEach(p=>{
@@ -394,26 +395,48 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
             return Object.values(grupos).map(g=>{
               const kg=Math.round(g.pacotes.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
               return (
-                <div key={g.corte} style={{display:"flex",justifyContent:"space-between",
-                  alignItems:"center",padding:"8px 10px",borderRadius:8,marginBottom:6,
-                  background:C.primary+"18"}}>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</div>
-                    <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>
-                      {g.tipo} · 📍 {g.local}
-                      {g.pacotes.length>1&&<span> · {g.pacotes.length} pacotes</span>}
+                <div key={g.corte} style={{background:C.primary+"18",borderRadius:10,
+                  padding:"10px 12px",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",
+                    alignItems:"center",marginBottom:g.pacotes.length>0?6:0}}>
+                    <div>
+                      <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
+                      <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>
+                        {g.tipo} · {g.local}
+                      </span>
                     </div>
+                    <span style={{fontWeight:800,fontSize:15,color:C.primary}}>{fmtKg(kg)}</span>
                   </div>
-                  <div style={{fontWeight:800,fontSize:16,color:C.primary}}>{fmtKg(kg)}</div>
+                  {g.pacotes.map((p,i)=>(
+                    <div key={p.id} style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"center",padding:"5px 4px",
+                      borderTop:`1px solid ${C.border}44`}}>
+                      <span style={{fontSize:12,color:C.muted}}>
+                        Pacote {i+1} · {fmtKg(p.pesoAtual)}
+                      </span>
+                      <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
+                        title="Remover da lista — volta ao estoque"
+                        style={{background:"none",border:`1px solid ${C.danger}55`,
+                          borderRadius:6,padding:"3px 8px",cursor:"pointer",
+                          color:C.danger,fontSize:11,fontWeight:600}}>
+                        ✕ Não retirar
+                      </button>
+                    </div>
+                  ))}
                 </div>
               );
             });
           })()}
-          <div style={{display:"flex",gap:10,marginTop:10}}>
+
+          <div style={{fontSize:11,color:C.muted,marginBottom:10,textAlign:"center"}}>
+            Clique em "✕ Não retirar" para deixar um pacote no estoque.
+          </div>
+
+          <div style={{display:"flex",gap:10}}>
             <button onClick={onCancelChurrasco}
               style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
                 borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
-              ❌ Cancelar
+              ❌ Cancelar tudo
             </button>
             <button onClick={onConfirmChurrasco}
               style={{flex:2,background:C.primary,border:"none",
@@ -3007,7 +3030,7 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco}/>}
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
