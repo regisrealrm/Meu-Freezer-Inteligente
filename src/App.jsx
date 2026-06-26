@@ -3118,7 +3118,10 @@ export default function App() {
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>setExits(p=>p.filter(e=>e.feitorPor&&e.feitorPor!==currentUser))}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>{
+          setExits([]);
+          setMeats(p=>p.filter(m=>m.pesoTotal>0));
+        }}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
