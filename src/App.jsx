@@ -192,7 +192,7 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,onTogglePacoteChurrasco}) {
+function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
@@ -370,6 +370,37 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
             );
           })()}
         </>
+      )}
+
+      {/* ── Lista de Compras ─────────────────────────────── */}
+      {shoppingList?.length>0&&(
+        <div style={{background:C.card,border:`2px solid ${C.success}`,borderRadius:14,
+          padding:"14px 16px",marginBottom:14}}>
+          <div style={{fontWeight:800,fontSize:16,color:C.success,marginBottom:10}}>
+            🛒 Lista de Compras
+          </div>
+          {shoppingList.map(item=>(
+            <div key={item.id} style={{display:"flex",justifyContent:"space-between",
+              alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div>
+                <span style={{fontWeight:600,fontSize:14}}>{item.nome}</span>
+                {item.tipo&&<span style={{fontSize:11,color:C.muted,marginLeft:8,
+                  textTransform:"capitalize",background:C.light,padding:"1px 6px",borderRadius:4}}>
+                  {item.tipo}
+                </span>}
+                {item.addedBy&&<span style={{fontSize:11,color:C.muted,marginLeft:6}}>
+                  · {item.addedBy}
+                </span>}
+              </div>
+              <button onClick={()=>onRemoveFromShoppingList(item.id)}
+                style={{background:C.success+"22",border:`1px solid ${C.success}55`,
+                  borderRadius:8,padding:"5px 12px",cursor:"pointer",
+                  color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
+                ✓ Comprei
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* ── Card Preparar Churrasco ─────────────────────── */}
@@ -584,7 +615,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig,onTogglePacoteChurrasco}) {
+function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig,onTogglePacoteChurrasco,onAddToShoppingList}) {
   const [flocal,     setFlocal]     = useState("todos");
   const [futilidade,  setFutilidade]  = useState("todos");
   const [forigem,     setForigem]     = useState("todos");
@@ -1349,7 +1380,12 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                                 onUpdate(detail.id,{pacotes:updatedPacotes,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"});
                                 onRegisterExit({id:detail.id,tipo:detail.tipo,corte:detail.corte,local:detail.local,pesoRetirado:totalRetirado,dataSaida:saidaForm.data,motivo:saidaForm.motivo});
                                 setShowSaida(false); setSaidaForm({});
-                                if(novoTotal<=0) closeModal();
+                                if(novoTotal<=0){
+                                  closeModal();
+                                  if(window.confirm(`Acabou o estoque de "${detail.corte||detail.tipo}".\n\nAdicionar à lista de compras?`)){
+                                    onAddToShoppingList(detail.corte||detail.tipo, detail.tipo);
+                                  }
+                                }
                               }}
                                 style={{flex:2,background:C.danger,border:"none",borderRadius:8,
                                   padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
@@ -2375,7 +2411,7 @@ const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.c
 
 // ─── AJUSTES ──────────────────────────────────────────────────────────────────
 // ─── AJUSTES ──────────────────────────────────────────────────────────────────
-function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUpdateMeats,onRenameMeatField}) {
+function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUpdateMeats,onRenameMeatField,onClearHistory}) {
   const [editingSection,setEditingSection] = useState(null);
   const [newItem,       setNewItem]        = useState("");
   const [editIdx,       setEditIdx]        = useState(null);
@@ -2574,14 +2610,31 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
           </div>
         )}
       </Card>
+
+      {/* Zona de perigo */}
+      <Card style={{border:`1px solid ${C.danger}55`,marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:14,color:C.danger,marginBottom:10}}>⚠️ Zona de perigo</div>
+        <button onClick={()=>{
+          if(window.confirm("Tem certeza que quer apagar TODO o histórico?\n\nIsso remove saídas, transferências e entradas dos relatórios.\n\nO estoque atual NÃO será afetado."))
+            onClearHistory();
+        }} style={{width:"100%",background:C.danger+"18",border:`1px solid ${C.danger}55`,
+          borderRadius:10,padding:"12px",cursor:"pointer",color:C.danger,
+          fontSize:14,fontWeight:700}}>
+          🗑️ Limpar todos os históricos
+        </button>
+        <div style={{fontSize:11,color:C.muted,marginTop:6,textAlign:"center"}}>
+          Remove saídas e transferências dos relatórios. O estoque atual fica intacto.
+        </div>
+      </Card>
     </div>
   );
 }
 
 export default function App() {
-  const [meats,       setMeats]       = useState([]);
-  const [exits,       setExits]       = useState([]);
-  const [catalog,     setCatalog]     = useState([]);
+  const [meats,        setMeats]        = useState([]);
+  const [exits,        setExits]        = useState([]);
+  const [catalog,      setCatalog]      = useState([]);
+  const [shoppingList, setShoppingList] = useState([]);
   const [appConfig,   setAppConfig]   = useState({
     tipos:      [...TIPOS],
     locais:     [...LOCAIS],
@@ -2611,9 +2664,10 @@ export default function App() {
       if(local) {
         const d = JSON.parse(local);
         if(d.meats?.length||d.exits?.length||d.catalog?.length) {
-          setMeats(d.meats    || []);
-          setExits(d.exits    || []);
-          setCatalog(d.catalog || []);
+          setMeats(d.meats         || []);
+          setExits(d.exits         || []);
+          setCatalog(d.catalog     || []);
+          setShoppingList(d.shoppingList || []);
           if(d.appConfig) setAppConfig(d.appConfig);
           lastSaved.current = local;
         }
@@ -2631,9 +2685,10 @@ export default function App() {
           const localRaw = localStorage.getItem("mfi_local_data");
           if(!localRaw || hash !== lastSaved.current) {
             lastSaved.current = hash;
-            setMeats(data.meats    || []);
-            setExits(data.exits    || []);
-            setCatalog(data.catalog || []);
+            setMeats(data.meats         || []);
+            setExits(data.exits         || []);
+            setCatalog(data.catalog     || []);
+            setShoppingList(data.shoppingList || []);
             if(data.appConfig) setAppConfig(data.appConfig);
           }
         }
@@ -2645,7 +2700,7 @@ export default function App() {
   // ── SAVE: localStorage (sempre) + Firebase (quando disponível) ────────────
   useEffect(()=>{
     if(!loaded) return;
-    const currentHash = JSON.stringify({meats, exits, catalog, appConfig});
+    const currentHash = JSON.stringify({meats, exits, catalog, appConfig, shoppingList});
     if(currentHash === lastSaved.current) return;
 
     lastSaved.current = currentHash;
@@ -2674,7 +2729,7 @@ export default function App() {
       }
     }, 1000);
     return ()=>clearTimeout(t);
-  },[meats, exits, catalog, appConfig, loaded]);
+  },[meats, exits, catalog, appConfig, shoppingList, loaded]);
 
   // ── EXPORT / IMPORT ───────────────────────────────────────────────────────
   const exportData = () => {
@@ -2786,6 +2841,15 @@ export default function App() {
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
   const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
 
+  // ── LISTA DE COMPRAS ────────────────────────────────────────────────────────
+  const addToShoppingList = (nome, tipo) => {
+    setShoppingList(prev=>{
+      if(prev.some(i=>i.nome.toLowerCase()===nome.toLowerCase())) return prev;
+      return [...prev, {id:uid(), nome, tipo, addedBy:currentUser, addedAt:TODAY}];
+    });
+  };
+  const removeFromShoppingList = (id) => setShoppingList(p=>p.filter(i=>i.id!==id));
+
   // ── CHURRASCO ──────────────────────────────────────────────────────────────
   const togglePacoteChurrasco = (meatId, pacoteId) => {
     setMeats(prev=>prev.map(m=>{
@@ -2823,6 +2887,16 @@ export default function App() {
         dataSaida:TODAY, motivo:"churrasco", feitorPor:currentUser
       }]);
     });
+    // Detecta itens que ficaram sem estoque e oferece lista de compras
+    const esgotados = newMeats.filter(m=>
+      churrascoMeats.some(c=>c.id===m.id) && m.pesoTotal<=0
+    );
+    if(esgotados.length>0){
+      const nomes = esgotados.map(m=>m.corte||m.tipo).join(", ");
+      if(window.confirm(`Acabou o estoque de: ${nomes}.\n\nAdicionar à lista de compras?`)){
+        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo, m.tipo));
+      }
+    }
   };
 
   // Pacotes marcados para churrasco
@@ -3039,12 +3113,12 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>setExits(p=>p.filter(e=>e.feitorPor&&e.feitorPor!==currentUser))}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
