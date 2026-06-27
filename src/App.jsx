@@ -115,7 +115,7 @@ const ALERT = {
 const TODAY     = new Date().toISOString().split("T")[0];
 const diffDays  = (a,b) => Math.floor((new Date(b)-new Date(a))/86400000);
 const fmtDate   = (d) => { if(!d) return "—"; const [y,m,dd]=d.split("-"); return `${dd}/${m}/${y}`; };
-const fmtKg     = (kg) => (kg==null||isNaN(kg)?"—":`${Number(kg).toFixed(2).replace(".",",")} kg`);
+const fmtKg     = (kg) => (kg==null||isNaN(kg)?"—":`${Number(kg).toFixed(3).replace(".",",")} kg`);
 const fmtR      = (v)  => (v?`R$ ${Number(v).toFixed(2).replace(".",",")}`:null);
 const uid       = ()   => Math.random().toString(36).slice(2,9);
 
@@ -550,7 +550,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 : (()=>{
                     const grupos={};
                     pacotesChurrasco.forEach(p=>{
-                      if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,n:0};
+                      if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",utilidade:p.utilidade||"—",kg:0,n:0};
                       grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
                     });
                     return (
@@ -574,7 +574,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                           const rows=Object.values(grupos).map(g=>`<tr>
                             <td style="font-weight:600">${g.corte}</td>
                             <td style="text-transform:capitalize">${g.tipo}</td>
-                            <td>${g.local}</td>
+                            <td>${g.origem}</td>
+                            <td style="text-transform:capitalize">${g.utilidade}</td>
                             <td>${g.n} pct</td>
                             <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
                           </tr>`).join("");
@@ -598,11 +599,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
                             <table>
                               <thead><tr>
-                                <th>Corte</th><th>Tipo</th><th>Local</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                                <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
                               </tr></thead>
                               <tbody>${rows}</tbody>
                               <tfoot><tr>
-                                <td colspan="4">Total</td>
+                                <td colspan="5">Total</td>
                                 <td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td>
                               </tr></tfoot>
                             </table>
@@ -1142,6 +1143,21 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
     <div>
       <SecTitle icon="📦" children="Estoque"
         action={<Btn small onClick={()=>setTab("entrada")}>+ Nova entrada</Btn>}/>
+
+      {/* ── Busca rápida ────────────────────────────────── */}
+      <div style={{position:"relative",marginBottom:10}}>
+        <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",
+          fontSize:15,pointerEvents:"none",color:C.muted}}>🔍</span>
+        <input style={{...inputBase,width:"100%",padding:"11px 12px 11px 38px",
+          fontSize:14,boxSizing:"border-box"}}
+          placeholder="Buscar corte, tipo..."
+          value={fcorte} onChange={e=>setFcorte(e.target.value)}/>
+        {fcorte&&(
+          <button onClick={()=>setFcorte("")}
+            style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+              background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:16}}>✕</button>
+        )}
+      </div>
 
       {/* ── Filtros colapsáveis ──────────────────────── */}
       {(()=>{
@@ -1892,10 +1908,10 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 
 // ─── ENTRADA ──────────────────────────────────────────────────────────────────
 function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
-  const cfgTipos  = appConfig?.tipos      || TIPOS;
-  const cfgLocais = appConfig?.locais     || LOCAIS;
-  const cfgOrigens= appConfig?.origens    || ORIGENS;
-  const cfgUtils  = appConfig?.utilidades || ["churrasco","consumo"];
+  const cfgTipos  = [...(appConfig?.tipos      || TIPOS)].sort((a,b)=>a.localeCompare(b,"pt"));
+  const cfgLocais = [...(appConfig?.locais     || LOCAIS)].sort((a,b)=>a.localeCompare(b,"pt"));
+  const cfgOrigens= [...(appConfig?.origens    || ORIGENS)].sort((a,b)=>a.localeCompare(b,"pt"));
+  const cfgUtils  = [...(appConfig?.utilidades || ["churrasco","consumo"])].sort((a,b)=>a.localeCompare(b,"pt"));
   const blank = {tipo:cfgTipos[0]||"bovina",corte:"",origem:"",utilidade:"",pesoTotal:"",quantidadePecas:"1",
     dataEntrada:TODAY,local:cfgLocais[0]||"Freezer 1",status:"disponível",observacao:"",precoPago:"",precoKg:""};
   const [form,     setForm]    = useState(blank);
@@ -2040,7 +2056,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
           </FSelect>
           <FSelect label="Corte" value={form.corte} onChange={set("corte")}>
             <option value="">Selecione um corte...</option>
-            {catalog.map(c=>(
+            {[...catalog].sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map(c=>(
               <option key={c.key} value={c.nome}>{c.nome}</option>
             ))}
             {catalog.length===0&&(
@@ -2989,11 +3005,12 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
 
           {editingSection===s.key&&(
             <div style={{marginTop:12}}>
-              {(config[s.key]||[]).map((item,i)=>(
-                <ItemRow key={i} label={item} idx={i}
+              {[...(config[s.key]||[])].sort((a,b)=>a.localeCompare(b,"pt")).map((item,si)=>{
+                const origIdx=(config[s.key]||[]).indexOf(item);
+                return <ItemRow key={si} label={item} idx={origIdx}
                   onSave={()=>saveEdit(s.key,s.field)}
-                  onDelete={()=>deleteItem(s.key,i)}/>
-              ))}
+                  onDelete={()=>deleteItem(s.key,origIdx)}/>;
+              })}
               <div style={{display:"flex",gap:8,marginTop:10}}>
                 <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
                   placeholder="Novo item..."
@@ -3029,11 +3046,12 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
             {catalog.length===0&&(
               <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum corte cadastrado ainda.</div>
             )}
-            {catalog.map((c,i)=>(
-              <ItemRow key={c.key||i} label={c.nome} sub={c.tipo} idx={i}
-                onSave={()=>saveCorteEdit(i)}
-                onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==i))}/>
-            ))}
+            {[...catalog].sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map((c,si)=>{
+              const origIdx=catalog.findIndex(x=>x.key===c.key);
+              return <ItemRow key={c.key||si} label={c.nome} sub={c.tipo} idx={origIdx}
+                onSave={()=>saveCorteEdit(origIdx)}
+                onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==origIdx))}/>;
+            })}
             {/* Adicionar novo corte — independente de tipo */}
             <div style={{display:"flex",gap:8,marginTop:10}}>
               <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
@@ -3339,7 +3357,8 @@ export default function App() {
   // Pacotes marcados para churrasco
   const pacotesChurrasco = meats.flatMap(m=>
     (m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido")
-      .map(p=>({...p,meatId:m.id,corte:m.corte||m.tipo,tipo:m.tipo,local:m.local}))
+      .map(p=>({...p,meatId:m.id,corte:m.corte||m.tipo,tipo:m.tipo,
+        local:m.local,origem:m.origem||"—",utilidade:m.utilidade||"—"}))
   );
   const totalChurrascoKg = Math.round(pacotesChurrasco.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
 
