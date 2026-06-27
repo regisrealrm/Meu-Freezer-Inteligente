@@ -201,6 +201,100 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
   const origens    = appConfig?.origens    || ORIGENS;
   const utilidades = appConfig?.utilidades || ["churrasco","consumo"];
 
+  const openPrint = (html) => {
+    const w=window.open("","_blank");
+    if(w){w.document.write(html);w.document.close();}
+  };
+  const printBase = (title,color,bodyHTML) => {
+    const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
+    <title>${title}</title>
+    <style>body{font-family:Arial,sans-serif;color:#222;padding:20px;max-width:800px;margin:0 auto}
+    table td,table th{border-bottom:1px solid #eee;padding:5px 8px}
+    @media print{body{padding:0}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${color};padding-bottom:8px;margin-bottom:16px">
+      <h1 style="margin:0;font-size:20px;color:${color}">${title}</h1>
+      <span style="font-size:12px;color:#666">${now}</span>
+    </div>
+    ${bodyHTML}
+    <script>window.onload=()=>window.print()<\/script>
+    </body></html>`;
+  };
+
+  const printEstoque = () => {
+    const locais=[...new Set(meats.map(m=>m.local).filter(Boolean))];
+    const totalGeral=meats.reduce((s,m)=>s+m.pesoTotal,0);
+    const body=`<p style="margin:0 0 12px;font-size:14px;color:#555">Total em estoque: <strong>${totalGeral.toFixed(3).replace(".",",")} kg</strong></p>`+
+      locais.map(local=>{
+        const items=meats.filter(m=>m.local===local);
+        const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
+        return `<h3 style="margin:16px 0 4px;border-bottom:1px solid #ccc">📍 ${local}</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:#f0f0f0">
+            <th style="text-align:left">Corte</th><th style="text-align:left">Tipo</th>
+            <th style="text-align:left">Origem</th><th style="text-align:left">Pacotes</th>
+            <th style="text-align:right">Peso</th>
+          </tr></thead>
+          <tbody>${items.map(m=>`<tr>
+            <td>${m.corte||m.tipo}</td>
+            <td style="text-transform:capitalize">${m.tipo}</td>
+            <td>${m.origem||"—"}</td>
+            <td>${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
+            <td style="text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
+          </tr>`).join("")}</tbody>
+          <tfoot><tr style="font-weight:700;background:#f9f9f9">
+            <td colspan="4">Total ${local}</td>
+            <td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
+          </tr></tfoot>
+        </table>`;
+      }).join("");
+    openPrint(printBase("📦 Estoque Atual","#1565c0",body));
+  };
+
+  const printChurrasco = () => {
+    if(!pacotesChurrasco?.length) return alert("Nenhum pacote marcado para churrasco.");
+    const grupos={};
+    pacotesChurrasco.forEach(p=>{
+      if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,n:0};
+      grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
+    });
+    const body=`<p style="margin:0 0 12px;font-size:14px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#fff3e0">
+        <th style="text-align:left">Corte</th><th style="text-align:left">Tipo</th>
+        <th style="text-align:left">Local</th><th style="text-align:left">Pacotes</th>
+        <th style="text-align:right">Peso</th>
+      </tr></thead>
+      <tbody>${Object.values(grupos).map(g=>`<tr>
+        <td>${g.corte}</td><td style="text-transform:capitalize">${g.tipo}</td>
+        <td>${g.local}</td><td>${g.n} pct</td>
+        <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+      </tr>`).join("")}</tbody>
+      <tfoot><tr style="font-weight:700;background:#fff3e0">
+        <td colspan="4">Total</td>
+        <td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td>
+      </tr></tfoot>
+    </table>`;
+    openPrint(printBase("🔥 Preparar Churrasco","#e65c00",body));
+  };
+
+  const printCompras = () => {
+    if(!shoppingList?.length) return alert("Lista de compras está vazia.");
+    const body=`<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#e8f5e9">
+        <th style="text-align:left">Item</th>
+        <th style="text-align:left">Tipo</th>
+        <th style="text-align:left">Adicionado por</th>
+      </tr></thead>
+      <tbody>${shoppingList.map(i=>`<tr>
+        <td>${i.nome}</td>
+        <td style="text-transform:capitalize">${i.tipo||"—"}</td>
+        <td>${i.addedBy||"—"}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+    openPrint(printBase("🛒 Lista de Compras","#2e7d32",body));
+  };
+
   const toggle = k => {
     setOpen(p=>p===k?null:k);
     setOpenUtil(null); setOpenOrigem(null); setLocalFlt("todos");
@@ -240,6 +334,22 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
 
   return (
     <div>
+      {/* ── Botões de impressão ──────────────────────── */}
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        {[
+          {label:"📦 Estoque",   fn:printEstoque, color:C.info},
+          {label:"🔥 Churrasco", fn:printChurrasco, color:C.primary},
+          {label:"🛒 Compras",   fn:printCompras,  color:C.success},
+        ].map(b=>(
+          <button key={b.label} onClick={b.fn}
+            style={{flex:1,background:b.color+"18",border:`1px solid ${b.color}55`,
+              borderRadius:8,padding:"7px 10px",cursor:"pointer",
+              fontSize:11,color:b.color,fontWeight:700}}>
+            🖨️ {b.label}
+          </button>
+        ))}
+      </div>
+
       {/* ── 2×2 clickable stat cards ─────────────────── */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
         {boxes.map(b=>{
