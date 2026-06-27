@@ -2537,9 +2537,9 @@ function Churrasometro({meats, catalog}) {
     setResult(null);
   };
 
-  // Stock disponível para um corte do catálogo
+  // Stock disponível para um corte — busca por nome (não mais pelo key antigo)
   const stockOf = entry => meats
-    .filter(m=>`${m.tipo}:${(m.corte||m.tipo).trim().toLowerCase()}`===entry.key)
+    .filter(m=>(m.corte||m.tipo).trim().toLowerCase()===entry.nome.trim().toLowerCase())
     .reduce((s,m)=>s+m.pesoTotal, 0);
 
   const calcular = () => {
@@ -2548,7 +2548,7 @@ function Churrasometro({meats, catalog}) {
     const totalKg = (adultos*gAdulto + criancas*gAdulto*0.5)/1000;
     const kgCorte = totalKg / selKeys.length;
     const cortes  = selKeys.map(key=>{
-      const entry = catalog.find(c=>c.key===key);
+      const entry = catalog.find(c=>c.key===key||c.nome.toLowerCase()===key);
       const disp  = entry ? stockOf(entry) : 0;
       return {key, entry, necessario:kgCorte, disp, falta:Math.max(0,kgCorte-disp)};
     });
@@ -2565,10 +2565,22 @@ function Churrasometro({meats, catalog}) {
     </button>
   );
 
-  // Só cortes cadastrados com utilidade "churrasco" no estoque
+  // Cortes com utilidade "churrasco" no estoque — busca por nome, inclui mesmo sem catálogo
   const churrascoCortes = (() => {
-    const keys = new Set(meats.filter(m=>m.utilidade==="churrasco").map(m=>`${m.tipo}:${(m.corte||m.tipo).trim().toLowerCase()}`));
-    return catalog.filter(c=>keys.has(c.key));
+    const churrascoMeats = meats.filter(m=>m.utilidade==="churrasco"&&m.pesoTotal>0);
+    const nomes = new Set(churrascoMeats.map(m=>(m.corte||m.tipo).trim().toLowerCase()));
+    // Tenta encontrar no catálogo pelo nome
+    const fromCatalog = catalog.filter(c=>nomes.has(c.nome.trim().toLowerCase()));
+    const catalogNomes = new Set(fromCatalog.map(c=>c.nome.trim().toLowerCase()));
+    // Itens com utilidade churrasco mas sem entrada no catálogo → cria entrada sintética
+    const synthetic = [...nomes]
+      .filter(n=>!catalogNomes.has(n))
+      .map(n=>{
+        const m = churrascoMeats.find(x=>(x.corte||x.tipo).trim().toLowerCase()===n);
+        const nome = m?.corte||m?.tipo||n;
+        return {id:`synth:${n}`, nome, tipo:m?.tipo||"", key:nome.toLowerCase()};
+      });
+    return [...fromCatalog, ...synthetic];
   })();
 
   return (
