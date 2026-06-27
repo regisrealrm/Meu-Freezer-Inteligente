@@ -332,23 +332,280 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
     {id:"valor",   icon:"💰", label:"Valor em estoque", value:fmtR(valorAtual)||"R$ 0,00", color:C.success},
   ];
 
+  const [showPrintScreen, setShowPrintScreen] = useState(false);
+  const [pfLocal,  setPfLocal]  = useState("todos");
+  const [pfTipo,   setPfTipo]   = useState("todos");
+  const [pfOrigem, setPfOrigem] = useState("todos");
+
   return (
     <div>
-      {/* ── Botões de impressão ──────────────────────── */}
-      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        {[
-          {label:"📦 Estoque",   fn:printEstoque, color:C.info},
-          {label:"🔥 Churrasco", fn:printChurrasco, color:C.primary},
-          {label:"🛒 Compras",   fn:printCompras,  color:C.success},
-        ].map(b=>(
-          <button key={b.label} onClick={b.fn}
-            style={{flex:1,background:b.color+"18",border:`1px solid ${b.color}55`,
-              borderRadius:8,padding:"7px 10px",cursor:"pointer",
-              fontSize:11,color:b.color,fontWeight:700}}>
-            🖨️ {b.label}
-          </button>
-        ))}
+      {/* ── Botão imprimir ───────────────────────────── */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+        <button onClick={()=>setShowPrintScreen(true)}
+          style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,
+            padding:"7px 16px",cursor:"pointer",fontSize:13,color:C.muted,fontWeight:600}}>
+          🖨️ Imprimir
+        </button>
       </div>
+
+      {/* ── Tela de impressão ────────────────────────── */}
+      {showPrintScreen&&(
+        <div style={{position:"fixed",inset:0,background:C.bg,zIndex:400,overflowY:"auto",padding:"16px 16px 100px"}}>
+          <div style={{maxWidth:600,margin:"0 auto"}}>
+
+            {/* Header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontWeight:800,fontSize:18}}>🖨️ Impressão</div>
+              <button onClick={()=>setShowPrintScreen(false)}
+                style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                  padding:"6px 14px",cursor:"pointer",fontSize:13,color:C.muted}}>
+                ✕ Fechar
+              </button>
+            </div>
+
+            {/* ── BLOCO 1: Estoque ── */}
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
+              <div style={{fontWeight:800,fontSize:15,color:C.info,marginBottom:12}}>📦 Estoque</div>
+
+              {/* Filtros */}
+              <div style={{marginBottom:12,display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>LOCAL</span>
+                  {["todos",...(appConfig?.locais||LOCAIS).filter(l=>meats.some(m=>m.local===l))].map(l=>(
+                    <button key={l} onClick={()=>setPfLocal(l)}
+                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
+                        background:pfLocal===l?C.info+"22":C.light,
+                        border:`1px solid ${pfLocal===l?C.info:C.border}`,
+                        color:pfLocal===l?C.info:C.muted}}>
+                      {l==="todos"?"Todos":l}
+                    </button>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>TIPO</span>
+                  {["todos",...(appConfig?.tipos||TIPOS).filter(t=>meats.some(m=>m.tipo===t))].map(t=>(
+                    <button key={t} onClick={()=>setPfTipo(t)}
+                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
+                        textTransform:"capitalize",
+                        background:pfTipo===t?C.info+"22":C.light,
+                        border:`1px solid ${pfTipo===t?C.info:C.border}`,
+                        color:pfTipo===t?C.info:C.muted}}>
+                      {t==="todos"?"Todos":t}
+                    </button>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>ORIGEM</span>
+                  {["todos",...(appConfig?.origens||ORIGENS).filter(o=>meats.some(m=>m.origem===o))].map(o=>(
+                    <button key={o} onClick={()=>setPfOrigem(o)}
+                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
+                        background:pfOrigem===o?C.info+"22":C.light,
+                        border:`1px solid ${pfOrigem===o?C.info:C.border}`,
+                        color:pfOrigem===o?C.info:C.muted}}>
+                      {o==="todos"?"Todas":o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lista filtrada */}
+              {(()=>{
+                const filtered=meats
+                  .filter(m=>pfLocal==="todos"||m.local===pfLocal)
+                  .filter(m=>pfTipo==="todos"||m.tipo===pfTipo)
+                  .filter(m=>pfOrigem==="todos"||m.origem===pfOrigem);
+                const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
+                return (
+                  <>
+                    {filtered.length===0
+                      ? <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum item com esses filtros.</div>
+                      : filtered.map(m=>(
+                          <div key={m.id} style={{display:"flex",justifyContent:"space-between",
+                            padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                            <div>
+                              <span style={{fontWeight:600}}>{m.corte||m.tipo}</span>
+                              <span style={{fontSize:11,color:C.muted,marginLeft:6,textTransform:"capitalize"}}>{m.tipo}</span>
+                              <span style={{fontSize:11,color:C.muted}}> · {m.local}</span>
+                            </div>
+                            <span style={{fontWeight:700,color:C.info}}>{fmtKg(m.pesoTotal)}</span>
+                          </div>
+                        ))
+                    }
+                    {filtered.length>0&&(
+                      <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,
+                        padding:"8px 0 4px",fontSize:13,color:C.info}}>
+                        <span>{filtered.length} item{filtered.length!==1?"s":""}</span>
+                        <span>{fmtKg(total)}</span>
+                      </div>
+                    )}
+                    <button onClick={()=>{
+                      const locais=[...new Set(filtered.map(m=>m.local).filter(Boolean))];
+                      const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                      const body=locais.map(local=>{
+                        const items=filtered.filter(m=>m.local===local);
+                        const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
+                        return `<h3 style="margin:16px 0 4px;border-bottom:1px solid #ccc">📍 ${local}</h3>
+                        <table style="width:100%;border-collapse:collapse;font-size:13px">
+                          <thead><tr style="background:#f0f0f0">
+                            <th style="text-align:left;padding:4px 8px">Corte</th>
+                            <th style="text-align:left;padding:4px 8px">Tipo</th>
+                            <th style="text-align:left;padding:4px 8px">Origem</th>
+                            <th style="text-align:left;padding:4px 8px">Pacotes</th>
+                            <th style="text-align:right;padding:4px 8px">Peso</th>
+                          </tr></thead>
+                          <tbody>${items.map(m=>`<tr>
+                            <td style="padding:4px 8px">${m.corte||m.tipo}</td>
+                            <td style="padding:4px 8px;text-transform:capitalize">${m.tipo}</td>
+                            <td style="padding:4px 8px">${m.origem||"—"}</td>
+                            <td style="padding:4px 8px">${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
+                            <td style="padding:4px 8px;text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
+                          </tr>`).join("")}</tbody>
+                          <tfoot><tr style="font-weight:700;background:#f9f9f9">
+                            <td colspan="4" style="padding:4px 8px">Total</td>
+                            <td style="padding:4px 8px;text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
+                          </tr></tfoot>
+                        </table>`;
+                      }).join("");
+                      const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Estoque</title>
+                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}@media print{body{padding:0}}</style>
+                      </head><body>
+                        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
+                          <h1 style="margin:0;color:#1565c0;font-size:20px">📦 Estoque Atual</h1>
+                          <span style="font-size:12px;color:#666">${now}</span>
+                        </div>
+                        <p style="margin:0 0 12px;font-size:13px;color:#555">Total: <strong>${fmtKg(total)}</strong></p>
+                        ${body}
+                        <script>window.onload=()=>window.print()<\/script>
+                      </body></html>`;
+                      const w=window.open("","_blank");
+                      if(w){w.document.write(html);w.document.close();}
+                    }} style={{marginTop:10,width:"100%",background:C.info,border:"none",
+                      borderRadius:10,padding:"11px",cursor:"pointer",
+                      color:"#fff",fontSize:13,fontWeight:700}}>
+                      🖨️ Imprimir Estoque
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* ── BLOCO 2: Preparar Churrasco ── */}
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
+              <div style={{fontWeight:800,fontSize:15,color:C.primary,marginBottom:12}}>🔥 Preparar Churrasco</div>
+              {!pacotesChurrasco?.length
+                ? <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum pacote marcado para churrasco.</div>
+                : (()=>{
+                    const grupos={};
+                    pacotesChurrasco.forEach(p=>{
+                      if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,n:0};
+                      grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
+                    });
+                    return (
+                      <>
+                        {Object.values(grupos).map(g=>(
+                          <div key={g.corte} style={{display:"flex",justifyContent:"space-between",
+                            padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                            <div>
+                              <span style={{fontWeight:600}}>{g.corte}</span>
+                              <span style={{fontSize:11,color:C.muted,marginLeft:6}}>{g.n} pct · {g.local}</span>
+                            </div>
+                            <span style={{fontWeight:700,color:C.primary}}>{fmtKg(g.kg)}</span>
+                          </div>
+                        ))}
+                        <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,
+                          padding:"8px 0 4px",fontSize:13,color:C.primary}}>
+                          <span>Total</span><span>{fmtKg(totalChurrascoKg)}</span>
+                        </div>
+                        <button onClick={()=>{
+                          const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                          const rows=Object.values(grupos).map(g=>`<tr>
+                            <td style="padding:5px 8px">${g.corte}</td>
+                            <td style="padding:5px 8px;text-transform:capitalize">${g.tipo}</td>
+                            <td style="padding:5px 8px">${g.local}</td>
+                            <td style="padding:5px 8px">${g.n} pct</td>
+                            <td style="padding:5px 8px;text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+                          </tr>`).join("");
+                          const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
+                            <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}@media print{body{padding:0}}</style>
+                          </head><body>
+                            <div style="display:flex;justify-content:space-between;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
+                              <h1 style="margin:0;color:#e65c00;font-size:20px">🔥 Preparar Churrasco</h1>
+                              <span style="font-size:12px;color:#666">${now}</span>
+                            </div>
+                            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                              <thead><tr style="background:#fff3e0">
+                                <th style="text-align:left;padding:5px 8px">Corte</th>
+                                <th style="text-align:left;padding:5px 8px">Tipo</th>
+                                <th style="text-align:left;padding:5px 8px">Local</th>
+                                <th style="text-align:left;padding:5px 8px">Pacotes</th>
+                                <th style="text-align:right;padding:5px 8px">Peso</th>
+                              </tr></thead>
+                              <tbody>${rows}</tbody>
+                              <tfoot><tr style="font-weight:700;background:#fff3e0">
+                                <td colspan="4" style="padding:5px 8px">Total</td>
+                                <td style="padding:5px 8px;text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td>
+                              </tr></tfoot>
+                            </table>
+                            <script>window.onload=()=>window.print()<\/script>
+                          </body></html>`;
+                          const w=window.open("","_blank");
+                          if(w){w.document.write(html);w.document.close();}
+                        }} style={{marginTop:10,width:"100%",background:C.primary,border:"none",
+                          borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                          🖨️ Imprimir Churrasco
+                        </button>
+                      </>
+                    );
+                  })()
+              }
+            </div>
+
+            {/* ── BLOCO 3: Lista de Compras ── */}
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
+              <div style={{fontWeight:800,fontSize:15,color:C.success,marginBottom:12}}>🛒 Lista de Compras</div>
+              {!shoppingList?.length
+                ? <div style={{color:C.muted,textAlign:"center",padding:8}}>Lista de compras vazia.</div>
+                : (
+                  <>
+                    {shoppingList.map(i=>(
+                      <div key={i.id} style={{display:"flex",justifyContent:"space-between",
+                        padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
+                        <span style={{fontWeight:600}}>{i.nome}</span>
+                        <span style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{i.tipo||""}</span>
+                      </div>
+                    ))}
+                    <button onClick={()=>{
+                      const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                      const rows=(shoppingList||[]).map(i=>`<tr>
+                        <td style="padding:6px 8px;font-size:14px">☐ ${i.nome}</td>
+                        <td style="padding:6px 8px;text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
+                      </tr>`).join("");
+                      const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
+                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}@media print{body{padding:0}}</style>
+                      </head><body>
+                        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:12px">
+                          <h1 style="margin:0;color:#2e7d32;font-size:20px">🛒 Lista de Compras</h1>
+                          <span style="font-size:12px;color:#666">${now}</span>
+                        </div>
+                        <table style="width:100%;border-collapse:collapse;font-size:14px">
+                          <tbody>${rows}</tbody>
+                        </table>
+                        <script>window.onload=()=>window.print()<\/script>
+                      </body></html>`;
+                      const w=window.open("","_blank");
+                      if(w){w.document.write(html);w.document.close();}
+                    }} style={{marginTop:10,width:"100%",background:C.success,border:"none",
+                      borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                      🖨️ Imprimir Lista de Compras
+                    </button>
+                  </>
+                )
+              }
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* ── 2×2 clickable stat cards ─────────────────── */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
