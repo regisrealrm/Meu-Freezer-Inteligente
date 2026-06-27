@@ -2749,9 +2749,9 @@ function Relatorios({meats,exits}) {
   const hoje = TODAY;
   const primeiroDiaMes = hoje.slice(0,7)+"-01";
 
-  const [dataInicio, setDataInicio] = React.useState(primeiroDiaMes);
-  const [dataFim,    setDataFim]    = React.useState(hoje);
-  const [mostrar,    setMostrar]    = React.useState(false);
+  const [dataInicio, setDataInicio] = useState(primeiroDiaMes);
+  const [dataFim,    setDataFim]    = useState(hoje);
+  const [mostrar,    setMostrar]    = useState(false);
 
   const active    = meats.filter(m=>m.status!=="consumido"&&m.pesoTotal>0);
   const totalKg   = active.reduce((s,m)=>s+m.pesoTotal,0);
@@ -2951,6 +2951,195 @@ function Relatorios({meats,exits}) {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── AJUSTES ──────────────────────────────────────────────────────────────────
+function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUpdateMeats,onRenameMeatField,onClearHistory}) {
+  const [editingSection,setEditingSection] = useState(null);
+  const [newItem,       setNewItem]        = useState("");
+  const [editIdx,       setEditIdx]        = useState(null);
+  const [editVal,       setEditVal]        = useState("");
+  const [newCorte,      setNewCorte]       = useState("");
+
+  const sections = [
+    {key:"tipos",      title:"Tipos de carne",         icon:"🥩", color:C.primary,  field:"tipo"},
+    {key:"locais",     title:"Locais de armazenamento", icon:"📍", color:C.info,     field:"local"},
+    {key:"origens",    title:"Origens",                 icon:"🌿", color:C.success,  field:"origem"},
+    {key:"utilidades", title:"Utilidades",              icon:"🎯", color:C.warning,  field:"utilidade"},
+  ];
+
+  const openSection = (key) => {
+    setEditingSection(s=>s===key?null:key);
+    setEditIdx(null); setEditVal(""); setNewItem("");
+  };
+
+  const addItem = (key) => {
+    const val = newItem.trim();
+    if(!val) return;
+    if((config[key]||[]).some(v=>v.toLowerCase()===val.toLowerCase())) { alert("Já existe."); return; }
+    onUpdateConfig({...config,[key]:[...(config[key]||[]),val]});
+    setNewItem("");
+  };
+
+  const deleteItem = (key,idx) => {
+    onUpdateConfig({...config,[key]:(config[key]||[]).filter((_,i)=>i!==idx)});
+  };
+
+  const saveEdit = (key,field) => {
+    const val = editVal.trim();
+    if(!val) return;
+    const arr = config[key]||[];
+    const old = arr[editIdx];
+    if(old===undefined||old===val) { setEditIdx(null); setEditVal(""); return; }
+    onUpdateConfig({...config,[key]:arr.map((v,i)=>i===editIdx?val:v)});
+    // Propaga renomeação para meats
+    if(field&&old!==val) onRenameMeatField(field,old,val);
+    setEditIdx(null); setEditVal("");
+  };
+
+  const saveCorteEdit = (idx) => {
+    const val = editVal.trim();
+    if(!val) return;
+    const entry = catalog[idx];
+    if(!entry||entry.nome===val) { setEditIdx(null); setEditVal(""); return; }
+    onUpdateCatalog(catalog.map((c,i)=>
+      i===idx ? {...c, nome:val, key:val.toLowerCase()} : c
+    ));
+    onRenameMeatField("corte", entry.nome, val);
+    setEditIdx(null); setEditVal("");
+  };
+
+  const addCorte = () => {
+    const nome = newCorte.trim();
+    if(!nome) return;
+    const key = nome.toLowerCase();
+    if(catalog.some(c=>c.key===key)) { alert("Corte já existe."); return; }
+    onUpdateCatalog([...catalog, {id:uid(), nome, tipo:"", key}]);
+    setNewCorte("");
+  };
+
+  const ItemRow = ({label,sub,idx,onSave,onDelete}) => (
+    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+      {editIdx===idx ? (
+        <>
+          <input style={{...inputBase,flex:1,padding:"8px 10px",fontSize:13}}
+            value={editVal} autoFocus
+            onChange={e=>setEditVal(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&onSave()}/>
+          <button onClick={onSave}
+            style={{background:C.success+"22",border:`1px solid ${C.success}55`,borderRadius:8,
+              padding:"8px 12px",cursor:"pointer",color:C.success,fontSize:13,fontWeight:700}}>✅</button>
+          <button onClick={()=>{setEditIdx(null);setEditVal("");}}
+            style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+              padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12}}>✕</button>
+        </>
+      ) : (
+        <>
+          <div style={{flex:1,padding:"9px 12px",background:C.light,borderRadius:8,
+            fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>
+            {label}{sub&&<span style={{fontSize:11,color:C.muted,marginLeft:8,fontWeight:400}}>{sub}</span>}
+          </div>
+          <button onClick={()=>{setEditIdx(idx);setEditVal(label);}}
+            style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
+              padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12}}>✏️</button>
+          <button onClick={onDelete}
+            style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:8,
+              padding:"8px 10px",cursor:"pointer",color:C.danger,fontSize:12}}>🗑️</button>
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <SecTitle icon="⚙️" children="Ajustes"/>
+
+      {sections.map(s=>(
+        <Card key={s.key} style={{marginBottom:10}}>
+          <button onClick={()=>openSection(s.key)}
+            style={{width:"100%",background:"none",border:"none",cursor:"pointer",
+              display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>{s.icon}</span>
+              <span style={{fontWeight:700,fontSize:14,color:C.text}}>{s.title}</span>
+              <span style={{fontSize:11,color:C.muted,background:C.light,borderRadius:10,padding:"1px 8px"}}>
+                {(config[s.key]||[]).length}
+              </span>
+            </div>
+            <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
+          </button>
+          {editingSection===s.key&&(
+            <div style={{marginTop:12}}>
+              {[...(config[s.key]||[])].sort((a,b)=>a.localeCompare(b,"pt")).map((item,si)=>{
+                const origIdx=(config[s.key]||[]).indexOf(item);
+                return <ItemRow key={si} label={item} idx={origIdx}
+                  onSave={()=>saveEdit(s.key,s.field)}
+                  onDelete={()=>deleteItem(s.key,origIdx)}/>;
+              })}
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
+                  placeholder="Novo item..."
+                  value={newItem} onChange={e=>setNewItem(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addItem(s.key)}/>
+                <button onClick={()=>addItem(s.key)}
+                  style={{background:s.color+"22",border:`1px solid ${s.color}55`,borderRadius:8,
+                    padding:"9px 14px",cursor:"pointer",color:s.color,fontSize:13,fontWeight:700}}>+</button>
+              </div>
+            </div>
+          )}
+        </Card>
+      ))}
+
+      <Card style={{marginBottom:10}}>
+        <button onClick={()=>openSection("cortes")}
+          style={{width:"100%",background:"none",border:"none",cursor:"pointer",
+            display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:18}}>🔪</span>
+            <span style={{fontWeight:700,fontSize:14,color:C.text}}>Cortes do catálogo</span>
+            <span style={{fontSize:11,color:C.muted,background:C.light,borderRadius:10,padding:"1px 8px"}}>
+              {catalog.length}
+            </span>
+          </div>
+          <span style={{color:C.muted}}>{editingSection==="cortes"?"▲":"▼"}</span>
+        </button>
+        {editingSection==="cortes"&&(
+          <div style={{marginTop:12}}>
+            {catalog.length===0&&(
+              <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum corte cadastrado ainda.</div>
+            )}
+            {[...catalog].sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map((c,si)=>{
+              const origIdx=catalog.findIndex(x=>x.key===c.key);
+              return <ItemRow key={c.id||si} label={c.nome} sub={c.tipo} idx={origIdx}
+                onSave={()=>saveCorteEdit(origIdx)}
+                onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==origIdx))}/>;
+            })}
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
+                placeholder="Nome do corte..."
+                value={newCorte} onChange={e=>setNewCorte(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&addCorte()}/>
+              <button onClick={addCorte}
+                style={{background:C.primary+"22",border:`1px solid ${C.primary}55`,borderRadius:8,
+                  padding:"9px 14px",cursor:"pointer",color:C.primary,fontSize:13,fontWeight:700}}>+</button>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card style={{border:`1px solid ${C.danger}55`,marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:14,color:C.danger,marginBottom:10}}>⚠️ Zona de perigo</div>
+        <button onClick={onClearHistory}
+          style={{width:"100%",background:C.danger+"18",border:`1px solid ${C.danger}55`,
+            borderRadius:10,padding:"12px",cursor:"pointer",color:C.danger,fontSize:14,fontWeight:700}}>
+          🗑️ Limpar todos os históricos
+        </button>
+        <div style={{fontSize:11,color:C.muted,marginTop:6,textAlign:"center"}}>
+          Remove saídas e transferências dos relatórios. O estoque atual fica intacto.
+        </div>
+      </Card>
     </div>
   );
 }
