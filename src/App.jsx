@@ -424,13 +424,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 </div>
               )}
 
-              <button onClick={()=>{
-                const filtered=meats
-                  .filter(m=>pfLocais.length===0||pfLocais.includes(m.local))
-                  .filter(m=>pfTipos.length===0||pfTipos.includes(m.tipo))
-                  .filter(m=>pfOrigens.length===0||pfOrigens.includes(m.origem))
-                  .filter(m=>pfUtils.length===0||pfUtils.includes(m.utilidade));
-                if(!filtered.length){alert("Nenhum item com esses filtros.");return;}
+              {(()=>{
+                const gerarEstoquePDF = (filtered) => {
                 const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
                 const locais=[...new Set(filtered.map(m=>m.local).filter(Boolean))];
                 const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
@@ -471,11 +466,36 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   <script>window.onload=()=>window.print()<\/script>
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
-              }} style={{width:"100%",background:C.info,border:"none",borderRadius:10,
-                marginTop:showPfFilters?0:12,
-                padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
-                🖨️ Gerar impressão do Estoque
-              </button>
+              };
+              const openEstoqueWA = () => {
+                const filtered=meats
+                  .filter(m=>pfLocais.length===0||pfLocais.includes(m.local))
+                  .filter(m=>pfTipos.length===0||pfTipos.includes(m.tipo))
+                  .filter(m=>pfOrigens.length===0||pfOrigens.includes(m.origem))
+                  .filter(m=>pfUtils.length===0||pfUtils.includes(m.utilidade));
+                const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
+                const linhas=filtered.map(m=>`🥩 ${m.corte||m.tipo} (${m.tipo}) — ${m.pesoTotal.toFixed(3).replace(".",",")} kg`).join("%0A");
+                const txt=`📦 *Estoque Atual*%0ATotal: ${total.toFixed(3).replace(".",",")} kg%0A%0A${linhas}`;
+                window.open(`https://wa.me/?text=${txt}`,"_blank");
+              };
+              return (
+                <div style={{display:"flex",gap:8,marginTop:showPfFilters?0:12}}>
+                  <button onClick={()=>{
+                    const filtered=meats.filter(m=>pfLocais.length===0||pfLocais.includes(m.local)).filter(m=>pfTipos.length===0||pfTipos.includes(m.tipo)).filter(m=>pfOrigens.length===0||pfOrigens.includes(m.origem)).filter(m=>pfUtils.length===0||pfUtils.includes(m.utilidade));
+                    if(!filtered.length){alert("Nenhum item com esses filtros.");return;}
+                    gerarEstoquePDF(filtered);
+                  }} style={{flex:1,background:C.info,border:"none",borderRadius:10,
+                    padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                    🖨️ PDF
+                  </button>
+                  <button onClick={openEstoqueWA}
+                    style={{flex:1,background:"#25D366",border:"none",borderRadius:10,
+                      padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                    📤 WhatsApp
+                  </button>
+                </div>
+              );
+            })()}
             </div>
 
             {/* ── BLOCO 2: Preparar Churrasco ── */}
@@ -483,54 +503,80 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               <div style={{fontWeight:800,fontSize:15,color:C.primary,marginBottom:12}}>🔥 Preparar Churrasco</div>
               <div style={{fontSize:13,color:C.muted,marginBottom:12}}>
                 {pacotesChurrasco?.length>0
-                  ? `${pacotesChurrasco.length} pacote${pacotesChurrasco.length!==1?"s":""} selecionado${pacotesChurrasco.length!==1?"s":""} · ${fmtKg(totalChurrascoKg)}`
+                  ? `${pacotesChurrasco.length} pacote${pacotesChurrasco.length!==1?"s":""} · ${fmtKg(totalChurrascoKg)}`
                   : "Nenhum pacote marcado para churrasco."}
               </div>
-              <button onClick={()=>{
-                if(!pacotesChurrasco?.length){alert("Nenhum pacote marcado para churrasco.");return;}
-                const grupos={};
-                pacotesChurrasco.forEach(p=>{
-                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",utilidade:p.utilidade||"—",kg:0,n:0};
-                  grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
-                });
-                const rows=Object.values(grupos).map(g=>`<tr>
-                  <td style="font-weight:600">${g.corte}</td>
-                  <td style="text-transform:capitalize">${g.tipo}</td>
-                  <td>${g.origem}</td>
-                  <td style="text-transform:capitalize">${g.utilidade}</td>
-                  <td>${g.n} pct</td>
-                  <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
-                </tr>`).join("");
-                const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-                const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
-                  <style>
-                    body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
-                    h1{margin:0;font-size:22px;color:#e65c00}
-                    table{width:100%;border-collapse:collapse;font-size:13px}
-                    th{text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px}
-                    td{padding:5px 8px;border-bottom:1px solid #eee}
-                    tfoot td{font-weight:700;background:#fff8f0;border-top:1px solid #ccc}
-                    .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                    @media print{body{padding:0}.close-btn{display:none}}
-                  </style></head><body>
-                  <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
-                    <h1>🔥 Preparar Churrasco</h1><span style="font-size:12px;color:#666">${now}</span>
+              {(()=>{
+                const genChurrascoHtml = () => {
+                  const grupos={};
+                  pacotesChurrasco.forEach(p=>{
+                    if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",
+                      utilidade:p.utilidade||"—",precoKg:p.precoKg,kg:0,n:0};
+                    grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
+                  });
+                  const rows=Object.values(grupos).map(g=>`<tr>
+                    <td style="font-weight:600">${g.corte}</td>
+                    <td style="text-transform:capitalize">${g.tipo}</td>
+                    <td>${g.origem}</td>
+                    <td style="text-transform:capitalize">${g.utilidade}</td>
+                    <td>${g.n} pct</td>
+                    <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+                  </tr>`).join("");
+                  const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
+                    <style>
+                      body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
+                      h1{margin:0;font-size:22px;color:#e65c00}
+                      table{width:100%;border-collapse:collapse;font-size:13px}
+                      th{text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px}
+                      td{padding:5px 8px;border-bottom:1px solid #eee}
+                      tfoot td{font-weight:700;background:#fff8f0;border-top:1px solid #ccc}
+                      .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                      @media print{body{padding:0}.close-btn{display:none}}
+                    </style></head><body>
+                    <button class="close-btn" onclick="window.close()">✕ Fechar</button>
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
+                      <h1>🔥 Preparar Churrasco</h1><span style="font-size:12px;color:#666">${now}</span>
+                    </div>
+                    <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
+                    <table><thead><tr>
+                      <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                    <tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
+                    </table>
+                    <script>window.onload=()=>window.print()<\/script>
+                  </body></html>`;
+                };
+                const openWhatsApp = () => {
+                  const grupos={};
+                  pacotesChurrasco.forEach(p=>{
+                    if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,kg:0};
+                    grupos[p.corte].kg+=p.pesoAtual;
+                  });
+                  const linhas=Object.values(grupos).map(g=>`🥩 ${g.corte} (${g.tipo}) — ${g.kg.toFixed(3).replace(".",",")} kg`).join("%0A");
+                  const txt=`🔥 *Preparar Churrasco*%0ATotal: ${totalChurrascoKg.toFixed(3).replace(".",",")} kg%0A%0A${linhas}`;
+                  window.open(`https://wa.me/?text=${txt}`,"_blank");
+                };
+                return (
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>{
+                      if(!pacotesChurrasco?.length){alert("Nenhum pacote marcado.");return;}
+                      const w=window.open("","_blank"); if(w){w.document.write(genChurrascoHtml());w.document.close();}
+                    }} style={{flex:1,background:C.primary,border:"none",borderRadius:10,
+                      padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                      🖨️ PDF
+                    </button>
+                    <button onClick={()=>{
+                      if(!pacotesChurrasco?.length){alert("Nenhum pacote marcado.");return;}
+                      openWhatsApp();
+                    }} style={{flex:1,background:"#25D366",border:"none",borderRadius:10,
+                      padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                      📤 WhatsApp
+                    </button>
                   </div>
-                  <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
-                  <table><thead><tr>
-                    <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
-                  </tr></thead>
-                  <tbody>${rows}</tbody>
-                  <tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
-                  </table>
-                  <script>window.onload=()=>window.print()<\/script>
-                </body></html>`;
-                const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
-              }} style={{width:"100%",background:C.primary,border:"none",borderRadius:10,
-                padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
-                🖨️ Gerar impressão do Churrasco
-              </button>
+                );
+              })()}
             </div>
 
             {/* ── BLOCO 3: Lista de Compras ── */}
@@ -541,11 +587,15 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   ? `${shoppingList.length} item${shoppingList.length!==1?"ns":""} na lista`
                   : "Lista de compras vazia."}
               </div>
-              <button onClick={()=>{
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{
                 if(!shoppingList?.length){alert("Lista de compras vazia.");return;}
                 const rows=(shoppingList||[]).map(i=>`<tr>
                   <td style="font-weight:600">☐  ${i.nome}</td>
                   <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
+                  <td style="color:#555">${i.origem||"—"}</td>
+                  <td style="text-transform:capitalize;color:#555">${i.utilidade||"—"}</td>
+                  <td style="text-align:right;color:#555">${i.precoKg?`R$ ${Number(i.precoKg).toFixed(2).replace(".",",")}`:"-"}</td>
                 </tr>`).join("");
                 const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                 const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
@@ -562,15 +612,25 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
                     <h1>🛒 Lista de Compras</h1><span style="font-size:12px;color:#666">${now}</span>
                   </div>
-                  <table><thead><tr><th>Item</th><th>Tipo</th></tr></thead>
+                  <table><thead><tr><th>Item</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th style="text-align:right">Preço/kg</th></tr></thead>
                   <tbody>${rows}</tbody></table>
                   <script>window.onload=()=>window.print()<\/script>
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
               }} style={{width:"100%",background:C.success,border:"none",borderRadius:10,
                 padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
-                🖨️ Gerar impressão da Lista de Compras
-              </button>
+                  🖨️ PDF
+                </button>
+                <button onClick={()=>{
+                  if(!shoppingList?.length){alert("Lista vazia.");return;}
+                  const linhas=(shoppingList||[]).map(i=>`☐ ${i.nome}${i.tipo?" ("+i.tipo+")":""}`).join("%0A");
+                  const txt=`🛒 *Lista de Compras*%0A%0A${linhas}`;
+                  window.open(`https://wa.me/?text=${txt}`,"_blank");
+                }} style={{flex:1,background:"#25D366",border:"none",borderRadius:10,
+                  padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+                  📤 WhatsApp
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -836,7 +896,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
             <div style={{padding:"12px 0 28px",borderTop:`1px solid ${C.border}`}}>
               <button onClick={()=>{
                 pendingItems.forEach(item=>
-                  onAddToShoppingList(item.corte,item.tipo,item.origem,item.utilidade)
+                  onAddToShoppingList(item.corte,item.tipo,item.origem,item.utilidade,item.precoKg||null)
                 );
                 setShowAddShopping(false);
                 setShowShoppingItems(true);
@@ -1849,7 +1909,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                                 if(novoTotal<=0){
                                   closeModal();
                                   if(window.confirm(`Acabou o estoque de "${detail.corte||detail.tipo}".\n\nAdicionar à lista de compras?`)){
-                                    onAddToShoppingList(detail.corte||detail.tipo, detail.tipo, detail.origem||"", detail.utilidade||"");
+                                    onAddToShoppingList(detail.corte||detail.tipo, detail.tipo, detail.origem||"", detail.utilidade||"", detail.precoKg||null);
                                   }
                                 }
                               }}
@@ -2680,11 +2740,6 @@ function Relatorios({meats,exits}) {
   const totalCons = exits.reduce((s,e)=>s+e.pesoRetirado,0);
   const totalDesc = exits.filter(e=>e.motivo==="descarte").reduce((s,e)=>s+e.pesoRetirado,0);
 
-  const byTipo   = TIPOS.map(t=>({name:t,kg:active.filter(m=>m.tipo===t).reduce((s,m)=>s+m.pesoTotal,0)})).filter(x=>x.kg>0);
-  const consTipo = TIPOS.map(t=>({name:t,kg:exits.filter(e=>e.tipo===t).reduce((s,e)=>s+e.pesoRetirado,0)})).filter(x=>x.kg>0);
-
-  const ttStyle  = {background:C.card,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,fontSize:12};
-
   return (
     <div>
       <SecTitle icon="📊" children="Relatórios"/>
@@ -2694,38 +2749,6 @@ function Relatorios({meats,exits}) {
         <StatCard icon="💰" label="Total investido"  value={fmtR(totalInv)||"R$ 0,00"} color={C.info}/>
         <StatCard icon="🗑️" label="Total descartado" value={fmtKg(totalDesc)}  color={totalDesc>0?C.danger:C.muted}/>
       </div>
-
-      {byTipo.length>0&&(
-        <Card style={{marginBottom:14}}>
-          <div style={{fontWeight:700,marginBottom:12}}>📦 Estoque por tipo (kg)</div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={byTipo} margin={{top:4,right:8,left:-20,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:11}}/>
-              <YAxis tick={{fill:C.muted,fontSize:11}}/>
-              <Tooltip contentStyle={ttStyle} formatter={v=>[`${v.toFixed(2)} kg`,"Peso"]}/>
-              <Bar dataKey="kg" radius={[4,4,0,0]}>
-                {byTipo.map(e=><Cell key={e.name} fill={TIPO_COLORS[e.name]||C.muted}/>)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
-
-      {consTipo.length>0&&(
-        <Card style={{marginBottom:14}}>
-          <div style={{fontWeight:700,marginBottom:12}}>🍽️ Consumo por tipo (kg)</div>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={consTipo} margin={{top:4,right:8,left:-20,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
-              <XAxis dataKey="name" tick={{fill:C.muted,fontSize:11}}/>
-              <YAxis tick={{fill:C.muted,fontSize:11}}/>
-              <Tooltip contentStyle={ttStyle} formatter={v=>[`${v.toFixed(2)} kg`,"Consumido"]}/>
-              <Bar dataKey="kg" fill={C.success} radius={[4,4,0,0]}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
 
       {/* Histórico de transferências */}
       {(()=>{
@@ -3309,11 +3332,19 @@ export default function App() {
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
   const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
 
+  // Verifica senha antes de ação destrutiva
+  const withPassword = (action) => {
+    const pwd = window.prompt("🔒 Digite a senha para confirmar:");
+    if(pwd === null) return; // cancelou
+    if(pwd === "1404") { action(); }
+    else { alert("❌ Senha incorreta."); }
+  };
+
   // ── LISTA DE COMPRAS ────────────────────────────────────────────────────────
-  const addToShoppingList = (nome, tipo, origem="", utilidade="") => {
+  const addToShoppingList = (nome, tipo, origem="", utilidade="", precoKg=null) => {
     setShoppingList(prev=>{
       if(prev.some(i=>i.nome.toLowerCase()===nome.toLowerCase()&&i.tipo===tipo)) return prev;
-      return [...prev, {id:uid(), nome, tipo, origem, utilidade, addedBy:currentUser, addedAt:TODAY}];
+      return [...prev, {id:uid(), nome, tipo, origem, utilidade, precoKg, addedBy:currentUser, addedAt:TODAY}];
     });
   };
   const removeFromShoppingList = (id) => setShoppingList(p=>p.filter(i=>i.id!==id));
@@ -3322,7 +3353,7 @@ export default function App() {
   const meatsCatalog = (()=>{
     const seen = new Set();
     return meats
-      .map(m=>({corte:m.corte||m.tipo, tipo:m.tipo||"", origem:m.origem||"", utilidade:m.utilidade||""}))
+      .map(m=>({corte:m.corte||m.tipo, tipo:m.tipo||"", origem:m.origem||"", utilidade:m.utilidade||"", precoKg:m.precoKg||null}))
       .filter(item=>{
         const key=`${item.tipo}:${item.corte}:${item.origem}:${item.utilidade}`;
         if(seen.has(key)) return false;
@@ -3375,7 +3406,7 @@ export default function App() {
     if(esgotados.length>0){
       const nomes = esgotados.map(m=>m.corte||m.tipo).join(", ");
       if(window.confirm(`Acabou o estoque de: ${nomes}.\n\nAdicionar à lista de compras?`)){
-        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo, m.tipo, m.origem||"", m.utilidade||""));
+        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo, m.tipo, m.origem||"", m.utilidade||"", m.precoKg||null));
       }
     }
   };
@@ -3384,7 +3415,8 @@ export default function App() {
   const pacotesChurrasco = meats.flatMap(m=>
     (m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido")
       .map(p=>({...p,meatId:m.id,corte:m.corte||m.tipo,tipo:m.tipo,
-        local:m.local,origem:m.origem||"—",utilidade:m.utilidade||"—"}))
+        local:m.local,origem:m.origem||"—",utilidade:m.utilidade||"—",
+        precoKg:m.precoKg||null}))
   );
   const totalChurrascoKg = Math.round(pacotesChurrasco.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
 
@@ -3596,14 +3628,11 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>{
-          setExits([]);
-          setMeats(p=>p.filter(m=>m.pesoTotal>0));
-        }}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>withPassword(()=>{setExits([]);setMeats(p=>p.filter(m=>m.pesoTotal>0));})}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
