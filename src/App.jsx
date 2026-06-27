@@ -205,13 +205,20 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
     const w=window.open("","_blank");
     if(w){w.document.write(html);w.document.close();}
   };
-  const printBase = (title,color,bodyHTML) => {
+
+  const printBase = (title, color, bodyHTML) => {
     const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
     return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
     <title>${title}</title>
-    <style>body{font-family:Arial,sans-serif;color:#222;padding:20px;max-width:800px;margin:0 auto}
-    table td,table th{border-bottom:1px solid #eee;padding:5px 8px}
-    @media print{body{padding:0}}</style></head><body>
+    <style>
+      body{font-family:Arial,sans-serif;color:#222;padding:20px;max-width:800px;margin:0 auto}
+      table td,table th{border-bottom:1px solid #eee;padding:5px 8px}
+      .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;
+        border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+      .close-btn:hover{background:#d32f2f}
+      @media print{body{padding:0}.close-btn{display:none}}
+    </style></head><body>
+    <button class="close-btn" onclick="window.close()">✕ Fechar</button>
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${color};padding-bottom:8px;margin-bottom:16px">
       <h1 style="margin:0;font-size:20px;color:${color}">${title}</h1>
       <span style="font-size:12px;color:#666">${now}</span>
@@ -481,8 +488,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         </table>`;
                       }).join("");
                       const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Estoque</title>
-                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}@media print{body{padding:0}}</style>
+                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}
+                        .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                        @media print{body{padding:0}.close-btn{display:none}}</style>
                       </head><body>
+                        <button class="close-btn" onclick="window.close()">✕ Fechar</button>
                         <div style="display:flex;justify-content:space-between;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
                           <h1 style="margin:0;color:#1565c0;font-size:20px">📦 Estoque Atual</h1>
                           <span style="font-size:12px;color:#666">${now}</span>
@@ -540,8 +550,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             <td style="padding:5px 8px;text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
                           </tr>`).join("");
                           const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
-                            <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}@media print{body{padding:0}}</style>
+                            <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}
+                            .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                            @media print{body{padding:0}.close-btn{display:none}}</style>
                           </head><body>
+                            <button class="close-btn" onclick="window.close()">✕ Fechar</button>
                             <div style="display:flex;justify-content:space-between;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
                               <h1 style="margin:0;color:#e65c00;font-size:20px">🔥 Preparar Churrasco</h1>
                               <span style="font-size:12px;color:#666">${now}</span>
@@ -595,8 +608,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         <td style="padding:6px 8px;text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
                       </tr>`).join("");
                       const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
-                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}@media print{body{padding:0}}</style>
+                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}
+                        .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                        @media print{body{padding:0}.close-btn{display:none}}</style>
                       </head><body>
+                        <button class="close-btn" onclick="window.close()">✕ Fechar</button>
                         <div style="display:flex;justify-content:space-between;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:12px">
                           <h1 style="margin:0;color:#2e7d32;font-size:20px">🛒 Lista de Compras</h1>
                           <span style="font-size:12px;color:#666">${now}</span>
