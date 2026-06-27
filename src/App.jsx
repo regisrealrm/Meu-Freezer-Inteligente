@@ -339,8 +339,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
     {id:"valor",   icon:"💰", label:"Valor em estoque", value:fmtR(valorAtual)||"R$ 0,00", color:C.success},
   ];
 
-  const [showPrintScreen, setShowPrintScreen] = useState(false);
-  const [showAddShopping, setShowAddShopping] = useState(false);
+  const [showPrintScreen,     setShowPrintScreen]     = useState(false);
+  const [showAddShopping,     setShowAddShopping]     = useState(false);
+  const [pendingItems,        setPendingItems]        = useState([]);
+  const [showShoppingItems,   setShowShoppingItems]   = useState(false);
+  const [showChurrascoItems,  setShowChurrascoItems]  = useState(false);
   const [showPfFilters,   setShowPfFilters]   = useState(false);
   const [pfLocais,  setPfLocais]  = useState([]);
   const [pfTipos,   setPfTipos]   = useState([]);
@@ -369,7 +372,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               <div style={{fontWeight:800,fontSize:18}}>🖨️ Impressão</div>
               <button onClick={()=>setShowPrintScreen(false)}
                 style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
-                  padding:"6px 14px",cursor:"pointer",fontSize:13,color:C.muted}}>
+                  padding:"6px 14px",cursor:"pointer",fontSize:14,color:C.muted,fontWeight:700}}>
                 ✕ Fechar
               </button>
             </div>
@@ -705,78 +708,112 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
         </>
       )}
 
-      {/* ── Lista de Compras — sempre visível ───────────── */}
+      {/* ── Lista de Compras — colapsável ───────────────── */}
       <div style={{background:C.card,border:`2px solid ${C.success}`,borderRadius:14,
-        padding:"14px 16px",marginBottom:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontWeight:800,fontSize:16,color:C.success}}>🛒 Lista de Compras</div>
-          <button onClick={()=>setShowAddShopping(true)}
-            style={{background:C.success,border:"none",borderRadius:8,
-              padding:"6px 14px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
-            ＋ Adicionar
-          </button>
+        marginBottom:14,overflow:"hidden"}}>
+        {/* Header clicável */}
+        <div onClick={()=>setShowShoppingItems(s=>!s)}
+          style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"14px 16px",cursor:"pointer"}}>
+          <div style={{fontWeight:800,fontSize:16,color:C.success}}>
+            🛒 Lista de Compras
+            {shoppingList?.length>0&&(
+              <span style={{fontSize:12,color:C.success,fontWeight:600,marginLeft:8}}>
+                ({shoppingList.length})
+              </span>
+            )}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={e=>{e.stopPropagation();setPendingItems([]);setShowAddShopping(true);}}
+              style={{background:C.success,border:"none",borderRadius:8,
+                padding:"5px 12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+              ＋
+            </button>
+            <span style={{color:C.muted,fontSize:14}}>{showShoppingItems?"▲":"▼"}</span>
+          </div>
         </div>
 
-        {!shoppingList?.length
-          ? <div style={{color:C.muted,textAlign:"center",padding:"12px 0",fontSize:13}}>
-              Lista vazia — adicione itens para comprar
-            </div>
-          : shoppingList.map(item=>(
-              <div key={item.id} style={{display:"flex",justifyContent:"space-between",
-                alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:14}}>{item.nome}</div>
-                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>
-                    {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
-                  </div>
+        {/* Itens — só aparecem quando expandido */}
+        {showShoppingItems&&(
+          <div style={{padding:"0 16px 14px"}}>
+            {!shoppingList?.length
+              ? <div style={{color:C.muted,textAlign:"center",padding:"12px 0",fontSize:13}}>
+                  Lista vazia — toque em ＋ para adicionar
                 </div>
-                <button onClick={()=>onRemoveFromShoppingList(item.id)}
-                  style={{background:C.success+"22",border:`1px solid ${C.success}55`,
-                    borderRadius:8,padding:"5px 12px",cursor:"pointer",
-                    color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap",marginLeft:8}}>
-                  ✓ Comprei
-                </button>
-              </div>
-            ))
-        }
+              : shoppingList.map(item=>(
+                  <div key={item.id} style={{display:"flex",justifyContent:"space-between",
+                    alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14}}>{item.nome}</div>
+                      <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                        {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                    <button onClick={()=>onRemoveFromShoppingList(item.id)}
+                      style={{background:C.success+"22",border:`1px solid ${C.success}55`,
+                        borderRadius:8,padding:"5px 12px",cursor:"pointer",
+                        color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap",marginLeft:8}}>
+                      ✓ Comprei
+                    </button>
+                  </div>
+                ))
+            }
+          </div>
+        )}
       </div>
 
-      {/* ── Modal: adicionar à lista de compras ──────────── */}
+      {/* ── Modal: adicionar à lista (multi-seleção) ─────── */}
       {showAddShopping&&(
         <div style={{position:"fixed",inset:0,background:"#000a",zIndex:500,
           display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div style={{background:C.bg,borderRadius:"18px 18px 0 0",width:"100%",
-            maxWidth:560,maxHeight:"80vh",display:"flex",flexDirection:"column",
-            padding:"16px 16px 32px"}}>
+            maxWidth:560,maxHeight:"85vh",display:"flex",flexDirection:"column",
+            padding:"16px 16px 0"}}>
+
+            {/* Header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{fontWeight:800,fontSize:16}}>＋ Adicionar à lista</div>
+              <div>
+                <div style={{fontWeight:800,fontSize:16}}>＋ Lista de Compras</div>
+                <div style={{fontSize:12,color:C.muted,marginTop:2}}>
+                  {pendingItems.length>0
+                    ? `${pendingItems.length} selecionado${pendingItems.length!==1?"s":""}`
+                    : "Toque para selecionar"}
+                </div>
+              </div>
               <button onClick={()=>setShowAddShopping(false)}
                 style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
-                  padding:"5px 12px",cursor:"pointer",fontSize:13,color:C.muted}}>✕</button>
+                  padding:"6px 12px",cursor:"pointer",fontSize:14,color:C.muted,fontWeight:700}}>
+                ✕
+              </button>
             </div>
 
-            <div style={{overflowY:"auto",flex:1}}>
+            {/* Lista de itens */}
+            <div style={{overflowY:"auto",flex:1,paddingBottom:8}}>
               {!meatsCatalog?.length
                 ? <div style={{color:C.muted,textAlign:"center",padding:20}}>
                     Nenhum item no histórico ainda.
                   </div>
-                : meatsCatalog.map((item,i)=>{
+                : meatsCatalog.map(item=>{
                     const key=`${item.tipo}:${item.corte}:${item.origem}:${item.utilidade}`;
                     const jaAdicionado=(shoppingList||[]).some(
                       s=>s.nome===item.corte&&s.tipo===item.tipo
                     );
+                    const selecionado=pendingItems.some(p=>p.key===key);
                     return (
                       <button key={key} onClick={()=>{
-                        if(!jaAdicionado){
-                          onAddToShoppingList(item.corte,item.tipo,item.origem,item.utilidade);
-                        }
-                        setShowAddShopping(false);
+                        if(jaAdicionado) return;
+                        setPendingItems(prev=>
+                          prev.some(p=>p.key===key)
+                            ? prev.filter(p=>p.key!==key)
+                            : [...prev,{key,...item}]
+                        );
                       }}
                         style={{width:"100%",display:"flex",justifyContent:"space-between",
                           alignItems:"center",padding:"10px 12px",marginBottom:4,
-                          background:jaAdicionado?C.success+"11":C.card,
-                          border:`1px solid ${jaAdicionado?C.success:C.border}`,
-                          borderRadius:10,cursor:"pointer",textAlign:"left"}}>
+                          background:selecionado?C.success+"22":jaAdicionado?C.light:C.card,
+                          border:`2px solid ${selecionado?C.success:jaAdicionado?C.border:C.border}`,
+                          borderRadius:10,cursor:jaAdicionado?"default":"pointer",textAlign:"left",
+                          opacity:jaAdicionado?0.6:1}}>
                         <div>
                           <div style={{fontWeight:700,fontSize:14,color:C.text}}>{item.corte}</div>
                           <div style={{fontSize:11,color:C.muted,marginTop:2,textTransform:"capitalize"}}>
@@ -784,90 +821,104 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                           </div>
                         </div>
                         {jaAdicionado
-                          ? <span style={{fontSize:11,color:C.success,fontWeight:700}}>✓ Na lista</span>
-                          : <span style={{fontSize:18,color:C.success}}>＋</span>
+                          ? <span style={{fontSize:11,color:C.muted,fontWeight:600}}>Já na lista</span>
+                          : selecionado
+                          ? <span style={{fontSize:20,color:C.success}}>✓</span>
+                          : <span style={{fontSize:20,color:C.muted}}>○</span>
                         }
                       </button>
                     );
                   })
               }
             </div>
+
+            {/* Botão OK fixo no rodapé */}
+            <div style={{padding:"12px 0 28px",borderTop:`1px solid ${C.border}`}}>
+              <button onClick={()=>{
+                pendingItems.forEach(item=>
+                  onAddToShoppingList(item.corte,item.tipo,item.origem,item.utilidade)
+                );
+                setShowAddShopping(false);
+                setShowShoppingItems(true);
+              }}
+                disabled={pendingItems.length===0}
+                style={{width:"100%",background:pendingItems.length>0?C.success:"#555",
+                  border:"none",borderRadius:12,padding:"14px",cursor:"pointer",
+                  color:"#fff",fontSize:15,fontWeight:800,
+                  opacity:pendingItems.length>0?1:0.5}}>
+                {pendingItems.length>0
+                  ? `✅ Adicionar ${pendingItems.length} item${pendingItems.length!==1?"ns":""}`
+                  : "Selecione itens para adicionar"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Card Preparar Churrasco ─────────────────────── */}
+      {/* ── Card Preparar Churrasco — colapsável ─────────── */}
       {pacotesChurrasco?.length>0&&(
         <div style={{background:"#2A1000",border:`2px solid ${C.primary}`,borderRadius:14,
-          padding:"14px 16px",marginBottom:14}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          marginBottom:14,overflow:"hidden"}}>
+          <div onClick={()=>setShowChurrascoItems(s=>!s)}
+            style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+              padding:"14px 16px",cursor:"pointer"}}>
             <div>
               <div style={{fontWeight:800,fontSize:16,color:C.primary}}>🔥 Preparar Churrasco</div>
-              <div style={{fontSize:12,color:C.muted}}>
-                {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} · {fmtKg(totalChurrascoKg)} total
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>
+                {pacotesChurrasco.length} pacote{pacotesChurrasco.length!==1?"s":""} · {fmtKg(totalChurrascoKg)}
               </div>
             </div>
+            <span style={{color:C.muted,fontSize:14}}>{showChurrascoItems?"▲":"▼"}</span>
           </div>
-
-          {/* Lista por corte com opção de desmarcar cada pacote */}
-          {(()=>{
-            const grupos={};
-            pacotesChurrasco.forEach(p=>{
-              if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,pacotes:[]};
-              grupos[p.corte].pacotes.push(p);
-            });
-            return Object.values(grupos).map(g=>{
-              const kg=Math.round(g.pacotes.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
-              return (
-                <div key={g.corte} style={{background:C.primary+"18",borderRadius:10,
-                  padding:"10px 12px",marginBottom:8}}>
-                  <div style={{display:"flex",justifyContent:"space-between",
-                    alignItems:"center",marginBottom:g.pacotes.length>0?6:0}}>
-                    <div>
-                      <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
-                      <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>
-                        {g.tipo} · {g.local}
-                      </span>
+          {showChurrascoItems&&(
+            <div style={{padding:"0 16px 14px"}}>
+              {(()=>{
+                const grupos={};
+                pacotesChurrasco.forEach(p=>{
+                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,pacotes:[]};
+                  grupos[p.corte].kg+=p.pesoAtual;
+                  grupos[p.corte].pacotes.push(p);
+                });
+                return Object.values(grupos).map(g=>(
+                  <div key={g.corte} style={{background:C.primary+"18",borderRadius:10,
+                    padding:"10px 12px",marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div>
+                        <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
+                        <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>
+                          {g.tipo} · {g.local}
+                        </span>
+                      </div>
+                      <span style={{fontWeight:800,fontSize:15,color:C.primary}}>{fmtKg(g.kg)}</span>
                     </div>
-                    <span style={{fontWeight:800,fontSize:15,color:C.primary}}>{fmtKg(kg)}</span>
+                    {g.pacotes.map((p,i)=>(
+                      <div key={p.id} style={{display:"flex",justifyContent:"space-between",
+                        alignItems:"center",padding:"5px 4px",borderTop:`1px solid ${C.border}44`}}>
+                        <span style={{fontSize:12,color:C.muted}}>Pacote {i+1} · {fmtKg(p.pesoAtual)}</span>
+                        <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
+                          style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
+                            padding:"3px 8px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:600}}>
+                          ✕ Não retirar
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  {g.pacotes.map((p,i)=>(
-                    <div key={p.id} style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"center",padding:"5px 4px",
-                      borderTop:`1px solid ${C.border}44`}}>
-                      <span style={{fontSize:12,color:C.muted}}>
-                        Pacote {i+1} · {fmtKg(p.pesoAtual)}
-                      </span>
-                      <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
-                        title="Remover da lista — volta ao estoque"
-                        style={{background:"none",border:`1px solid ${C.danger}55`,
-                          borderRadius:6,padding:"3px 8px",cursor:"pointer",
-                          color:C.danger,fontSize:11,fontWeight:600}}>
-                        ✕ Não retirar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              );
-            });
-          })()}
-
-          <div style={{fontSize:11,color:C.muted,marginBottom:10,textAlign:"center"}}>
-            Clique em "✕ Não retirar" para deixar um pacote no estoque.
-          </div>
-
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={onCancelChurrasco}
-              style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
-                borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
-              ❌ Cancelar tudo
-            </button>
-            <button onClick={onConfirmChurrasco}
-              style={{flex:2,background:C.primary,border:"none",
-                borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
-              ✅ Confirmar saída
-            </button>
-          </div>
+                ));
+              })()}
+              <div style={{display:"flex",gap:10,marginTop:10}}>
+                <button onClick={onCancelChurrasco}
+                  style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
+                    borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
+                  ❌ Cancelar tudo
+                </button>
+                <button onClick={onConfirmChurrasco}
+                  style={{flex:2,background:C.primary,border:"none",
+                    borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
+                  ✅ Confirmar saída
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1284,9 +1335,14 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
             maxHeight:"90vh",overflowY:"auto"}}
             onClick={e=>e.stopPropagation()}>
 
-            {/* Drag handle */}
-            <div style={{display:"flex",justifyContent:"center",paddingTop:12,paddingBottom:2}}>
-              <div style={{width:40,height:4,borderRadius:2,background:C.border}}/>
+            {/* Drag handle + fechar */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+              paddingTop:12,paddingBottom:2,paddingInline:16}}>
+              <div style={{width:40,height:4,borderRadius:2,background:C.border,margin:"0 auto"}}/>
+              <button onClick={closeModal}
+                style={{position:"absolute",right:16,top:12,background:C.light,
+                  border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",
+                  cursor:"pointer",fontSize:13,color:C.muted,fontWeight:700}}>✕</button>
             </div>
 
             {(()=>{
