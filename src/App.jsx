@@ -340,10 +340,12 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
   ];
 
   const [showPrintScreen, setShowPrintScreen] = useState(false);
-  const [pfLocal,  setPfLocal]  = useState("todos");
-  const [pfTipo,   setPfTipo]   = useState("todos");
-  const [pfOrigem, setPfOrigem] = useState("todos");
-  const [pfUtil,   setPfUtil]   = useState("todos");
+  const [showPfFilters,   setShowPfFilters]   = useState(false);
+  const [pfLocais,  setPfLocais]  = useState([]);
+  const [pfTipos,   setPfTipos]   = useState([]);
+  const [pfOrigens, setPfOrigens] = useState([]);
+  const [pfUtils,   setPfUtils]   = useState([]);
+  const togglePf = (arr,set,v) => set(p => p.includes(v)?p.filter(x=>x!==v):[...p,v]);
 
   return (
     <div>
@@ -373,56 +375,57 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
 
             {/* ── BLOCO 1: Estoque ── */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
-              <div style={{fontWeight:800,fontSize:15,color:C.info,marginBottom:12}}>📦 Estoque</div>
-              {/* Filtros */}
-              <div style={{marginBottom:12,display:"flex",flexDirection:"column",gap:8}}>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>LOCAL</span>
-                  {["todos",...(appConfig?.locais||LOCAIS).filter(l=>meats.some(m=>m.local===l))].map(l=>(
-                    <button key={l} onClick={()=>setPfLocal(l)}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        background:pfLocal===l?C.info+"22":C.light, border:`1px solid ${pfLocal===l?C.info:C.border}`, color:pfLocal===l?C.info:C.muted}}>
-                      {l==="todos"?"Todos":l}
-                    </button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>TIPO</span>
-                  {["todos",...(appConfig?.tipos||TIPOS).filter(t=>meats.some(m=>m.tipo===t))].map(t=>(
-                    <button key={t} onClick={()=>setPfTipo(t)}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,textTransform:"capitalize",
-                        background:pfTipo===t?C.info+"22":C.light, border:`1px solid ${pfTipo===t?C.info:C.border}`, color:pfTipo===t?C.info:C.muted}}>
-                      {t==="todos"?"Todos":t}
-                    </button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>ORIGEM</span>
-                  {["todos",...(appConfig?.origens||ORIGENS).filter(o=>meats.some(m=>m.origem===o))].map(o=>(
-                    <button key={o} onClick={()=>setPfOrigem(o)}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        background:pfOrigem===o?C.info+"22":C.light, border:`1px solid ${pfOrigem===o?C.info:C.border}`, color:pfOrigem===o?C.info:C.muted}}>
-                      {o==="todos"?"Todas":o}
-                    </button>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>UTILIDADE</span>
-                  {["todos",...(appConfig?.utilidades||["churrasco","consumo"]).filter(u=>meats.some(m=>m.utilidade===u))].map(u=>(
-                    <button key={u} onClick={()=>setPfUtil(u)}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        background:pfUtil===u?C.info+"22":C.light, border:`1px solid ${pfUtil===u?C.info:C.border}`, color:pfUtil===u?C.info:C.muted}}>
-                      {u==="todos"?"Todas":u}
-                    </button>
-                  ))}
-                </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:showPfFilters?12:0}}>
+                <div style={{fontWeight:800,fontSize:15,color:C.info}}>📦 Estoque</div>
+                <button onClick={()=>setShowPfFilters(f=>!f)}
+                  style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                    padding:"5px 12px",cursor:"pointer",fontSize:12,
+                    color:(pfLocais.length||pfTipos.length||pfOrigens.length||pfUtils.length)?C.info:C.muted,
+                    fontWeight:600}}>
+                  {(pfLocais.length||pfTipos.length||pfOrigens.length||pfUtils.length)
+                    ? `🔽 Filtros (${pfLocais.length+pfTipos.length+pfOrigens.length+pfUtils.length})`
+                    : "🔽 Filtros"}
+                </button>
               </div>
+
+              {showPfFilters&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                  {[
+                    {label:"📍 Local",     items:(appConfig?.locais||LOCAIS).filter(l=>meats.some(m=>m.local===l)),     arr:pfLocais,  set:setPfLocais},
+                    {label:"🥩 Tipo",      items:(appConfig?.tipos||TIPOS).filter(t=>meats.some(m=>m.tipo===t)),          arr:pfTipos,   set:setPfTipos},
+                    {label:"🌿 Origem",    items:(appConfig?.origens||ORIGENS).filter(o=>meats.some(m=>m.origem===o)),   arr:pfOrigens, set:setPfOrigens},
+                    {label:"🎯 Utilidade", items:(appConfig?.utilidades||["churrasco","consumo"]).filter(u=>meats.some(m=>m.utilidade===u)), arr:pfUtils, set:setPfUtils},
+                  ].map(({label,items,arr,set})=>(
+                    <div key={label} style={{background:C.light,borderRadius:10,padding:"8px 10px"}}>
+                      <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6}}>
+                        {label} {arr.length>0&&<span style={{color:C.info}}>({arr.length})</span>}
+                      </div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                        <button onClick={()=>set([])}
+                          style={{fontSize:10,padding:"2px 8px",borderRadius:8,cursor:"pointer",fontWeight:600,
+                            background:arr.length===0?C.info+"22":C.bg,
+                            border:`1px solid ${arr.length===0?C.info:C.border}`,
+                            color:arr.length===0?C.info:C.muted}}>Todos</button>
+                        {items.map(v=>(
+                          <button key={v} onClick={()=>togglePf(arr,set,v)}
+                            style={{fontSize:10,padding:"2px 8px",borderRadius:8,cursor:"pointer",fontWeight:600,
+                              textTransform:"capitalize",
+                              background:arr.includes(v)?C.info+"22":C.bg,
+                              border:`1px solid ${arr.includes(v)?C.info:C.border}`,
+                              color:arr.includes(v)?C.info:C.muted}}>{v}</button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <button onClick={()=>{
                 const filtered=meats
-                  .filter(m=>pfLocal==="todos"||m.local===pfLocal)
-                  .filter(m=>pfTipo==="todos"||m.tipo===pfTipo)
-                  .filter(m=>pfOrigem==="todos"||m.origem===pfOrigem)
-                  .filter(m=>pfUtil==="todos"||m.utilidade===pfUtil);
+                  .filter(m=>pfLocais.length===0||pfLocais.includes(m.local))
+                  .filter(m=>pfTipos.length===0||pfTipos.includes(m.tipo))
+                  .filter(m=>pfOrigens.length===0||pfOrigens.includes(m.origem))
+                  .filter(m=>pfUtils.length===0||pfUtils.includes(m.utilidade));
                 if(!filtered.length){alert("Nenhum item com esses filtros.");return;}
                 const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
                 const locais=[...new Set(filtered.map(m=>m.local).filter(Boolean))];
@@ -465,6 +468,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
               }} style={{width:"100%",background:C.info,border:"none",borderRadius:10,
+                marginTop:showPfFilters?0:12,
                 padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
                 🖨️ Gerar impressão do Estoque
               </button>
@@ -944,11 +948,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
 function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig,onTogglePacoteChurrasco,onAddToShoppingList}) {
-  const [flocal,     setFlocal]     = useState("todos");
-  const [futilidade,  setFutilidade]  = useState("todos");
-  const [forigem,     setForigem]     = useState("todos");
-  const [ftipo,       setFtipo]       = useState("todos");
-  const [fcorte,      setFcorte]      = useState("");
+  const [flocais,    setFlocais]    = useState([]);
+  const [futils,     setFutils]     = useState([]);
+  const [forigens,   setForigens]   = useState([]);
+  const [ftipos,     setFtipos]     = useState([]);
+  const [fcorte,     setFcorte]     = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [selected,    setSelected]    = useState(null);
   const [showXfer,    setShowXfer]    = useState(false);
@@ -966,15 +970,16 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 
   const countBy     = loc  => meats.filter(m=>m.local===loc).length;
   const countByUtil = util => meats.filter(m=>m.utilidade===util).length;
-  const hasFilter   = flocal!=="todos"||futilidade!=="todos"||forigem!=="todos"||ftipo!=="todos"||fcorte;
-  const clearAll    = () => { setFlocal("todos");setFutilidade("todos");setForigem("todos");setFtipo("todos");setFcorte(""); };
+  const hasFilter   = flocais.length>0||futils.length>0||forigens.length>0||ftipos.length>0||fcorte;
+  const clearAll    = () => { setFlocais([]);setFutils([]);setForigens([]);setFtipos([]);setFcorte(""); };
+  const toggleF = (arr,set,v) => set(p => p.includes(v)?p.filter(x=>x!==v):[...p,v]);
 
   const norm = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const filtered = meats
-    .filter(m=>flocal==="todos"     ||m.local===flocal)
-    .filter(m=>futilidade==="todos" ||m.utilidade===futilidade)
-    .filter(m=>forigem==="todos"    ||m.origem===forigem)
-    .filter(m=>ftipo==="todos"      ||m.tipo===ftipo)
+    .filter(m=>flocais.length===0  ||flocais.includes(m.local))
+    .filter(m=>futils.length===0   ||futils.includes(m.utilidade))
+    .filter(m=>forigens.length===0 ||forigens.includes(m.origem))
+    .filter(m=>ftipos.length===0   ||ftipos.includes(m.tipo))
     .filter(m=>!fcorte              ||norm(m.corte||m.tipo).includes(norm(fcorte))||norm(m.tipo).includes(norm(fcorte)))
     .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
 
@@ -1012,9 +1017,9 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 
   // ── Location pill button
   const LocPill = ({label,value,count}) => {
-    const active = flocal===value;
+    const active = flocais.includes(value)||value==="todos"&&flocais.length===0;
     return (
-      <button onClick={()=>setFlocal(value)}
+      <button onClick={()=>value==="todos"?setFlocais([]):toggleF(flocais,setFlocais,value)}
         style={{background:active?C.primary:C.card,color:active?"#fff":C.muted,
           border:`1px solid ${active?C.primary:C.border}`,borderRadius:20,
           padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600,
@@ -1052,7 +1057,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 
       {/* ── Filtros colapsáveis ──────────────────────── */}
       {(()=>{
-        const activeCount = [flocal!=="todos",futilidade!=="todos",forigem!=="todos",ftipo!=="todos",!!fcorte].filter(Boolean).length;
+        const activeCount = [flocais.length>0,futils.length>0,forigens.length>0,ftipos.length>0,!!fcorte].filter(Boolean).length;
         // estilo padrão de pill — todos do mesmo tamanho
         const pill = (active,color=C.primary) => ({
           padding:"8px 0",minWidth:90,flex:"1 1 0",
@@ -1083,27 +1088,27 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                 {/* Local */}
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>📍 LOCAL</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  <button style={pill(flocal==="todos")} onClick={()=>setFlocal("todos")}>Todos</button>
+                  <button style={pill(flocais.length===0)} onClick={()=>setFlocais([])}>Todos</button>
                   {(appConfig?.locais||LOCAIS).filter(l=>countBy(l)>0).map(l=>(
-                    <button key={l} style={pill(flocal===l)} onClick={()=>setFlocal(l)}>{l}</button>
+                    <button key={l} style={pill(flocais.includes(l))} onClick={()=>toggleF(flocais,setFlocais,l)}>{l}</button>
                   ))}
                 </div>
 
                 {/* Tipo */}
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🥩 TIPO</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  <button style={pill(ftipo==="todos",C.info)} onClick={()=>setFtipo("todos")}>Todos</button>
+                  <button style={pill(ftipos.length===0,C.info)} onClick={()=>setFtipos([])}>Todos</button>
                   {(appConfig?.tipos||TIPOS).filter(t=>meats.some(m=>m.tipo===t)).map(t=>(
-                    <button key={t} style={{...pill(ftipo===t,C.info),textTransform:"capitalize"}} onClick={()=>setFtipo(t)}>{t}</button>
+                    <button key={t} style={{...pill(ftipos.includes(t),C.info),textTransform:"capitalize"}} onClick={()=>toggleF(ftipos,setFtipos,t)}>{t}</button>
                   ))}
                 </div>
 
                 {/* Origem */}
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🌿 ORIGEM</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  <button style={pill(forigem==="todos",C.success)} onClick={()=>setForigem("todos")}>Todas</button>
+                  <button style={pill(forigens.length===0,C.success)} onClick={()=>setForigens([])}>Todas</button>
                   {(appConfig?.origens||ORIGENS).map((o,i)=>(
-                    <button key={o} style={pill(forigem===o,C.success)} onClick={()=>setForigem(o)}>
+                    <button key={o} style={pill(forigens.includes(o),C.success)} onClick={()=>toggleF(forigens,setForigens,o)}>
                       {getOrigenPalette(appConfig?.origens||ORIGENS,o).icon} {o}
                     </button>
                   ))}
@@ -1112,9 +1117,9 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                 {/* Utilidade */}
                 <div style={{fontSize:10,color:C.muted,fontWeight:700,marginBottom:6,letterSpacing:1}}>🎯 UTILIDADE</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                  <button style={pill(futilidade==="todos")} onClick={()=>setFutilidade("todos")}>Tudo</button>
+                  <button style={pill(futils.length===0)} onClick={()=>setFutils([])}>Tudo</button>
                   {(appConfig?.utilidades||["churrasco","consumo"]).map((u,i)=>(
-                    <button key={u} style={pill(futilidade===u)} onClick={()=>setFutilidade(u)}>
+                    <button key={u} style={pill(futils.includes(u))} onClick={()=>toggleF(futils,setFutils,u)}>
                       {getUtilPalette(appConfig?.utilidades||["churrasco","consumo"],u).icon} {u}
                     </button>
                   ))}
@@ -1184,7 +1189,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                 {al!=="ok"&&<Badge label={ai.label} color={ai.color}/>}
               </div>
               <div style={{fontSize:12,color:C.muted}}>
-                {flocal==="todos"&&<>📍 {m.local} · </>}{dis}d no estoque
+                {flocais.length===0&&<>📍 {m.local} · </>}{dis}d no estoque
                 {(()=>{
                   const pacs = m.pacotes||[];
                   const nAbertos = pacs.filter(p=>p.status==="aberto").length;
