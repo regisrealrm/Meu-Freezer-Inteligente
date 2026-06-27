@@ -192,7 +192,7 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList}) {
+function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList,onAddToShoppingList,meatsCatalog}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
@@ -340,6 +340,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
   ];
 
   const [showPrintScreen, setShowPrintScreen] = useState(false);
+  const [showAddShopping, setShowAddShopping] = useState(false);
   const [showPfFilters,   setShowPfFilters]   = useState(false);
   const [pfLocais,  setPfLocais]  = useState([]);
   const [pfTipos,   setPfTipos]   = useState([]);
@@ -704,34 +705,94 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
         </>
       )}
 
-      {/* ── Lista de Compras ─────────────────────────────── */}
-      {shoppingList?.length>0&&(
-        <div style={{background:C.card,border:`2px solid ${C.success}`,borderRadius:14,
-          padding:"14px 16px",marginBottom:14}}>
-          <div style={{fontWeight:800,fontSize:16,color:C.success,marginBottom:10}}>
-            🛒 Lista de Compras
-          </div>
-          {shoppingList.map(item=>(
-            <div key={item.id} style={{display:"flex",justifyContent:"space-between",
-              alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div>
-                <span style={{fontWeight:600,fontSize:14}}>{item.nome}</span>
-                {item.tipo&&<span style={{fontSize:11,color:C.muted,marginLeft:8,
-                  textTransform:"capitalize",background:C.light,padding:"1px 6px",borderRadius:4}}>
-                  {item.tipo}
-                </span>}
-                {item.addedBy&&<span style={{fontSize:11,color:C.muted,marginLeft:6}}>
-                  · {item.addedBy}
-                </span>}
-              </div>
-              <button onClick={()=>onRemoveFromShoppingList(item.id)}
-                style={{background:C.success+"22",border:`1px solid ${C.success}55`,
-                  borderRadius:8,padding:"5px 12px",cursor:"pointer",
-                  color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
-                ✓ Comprei
-              </button>
+      {/* ── Lista de Compras — sempre visível ───────────── */}
+      <div style={{background:C.card,border:`2px solid ${C.success}`,borderRadius:14,
+        padding:"14px 16px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontWeight:800,fontSize:16,color:C.success}}>🛒 Lista de Compras</div>
+          <button onClick={()=>setShowAddShopping(true)}
+            style={{background:C.success,border:"none",borderRadius:8,
+              padding:"6px 14px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
+            ＋ Adicionar
+          </button>
+        </div>
+
+        {!shoppingList?.length
+          ? <div style={{color:C.muted,textAlign:"center",padding:"12px 0",fontSize:13}}>
+              Lista vazia — adicione itens para comprar
             </div>
-          ))}
+          : shoppingList.map(item=>(
+              <div key={item.id} style={{display:"flex",justifyContent:"space-between",
+                alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14}}>{item.nome}</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                    {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                <button onClick={()=>onRemoveFromShoppingList(item.id)}
+                  style={{background:C.success+"22",border:`1px solid ${C.success}55`,
+                    borderRadius:8,padding:"5px 12px",cursor:"pointer",
+                    color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap",marginLeft:8}}>
+                  ✓ Comprei
+                </button>
+              </div>
+            ))
+        }
+      </div>
+
+      {/* ── Modal: adicionar à lista de compras ──────────── */}
+      {showAddShopping&&(
+        <div style={{position:"fixed",inset:0,background:"#000a",zIndex:500,
+          display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+          <div style={{background:C.bg,borderRadius:"18px 18px 0 0",width:"100%",
+            maxWidth:560,maxHeight:"80vh",display:"flex",flexDirection:"column",
+            padding:"16px 16px 32px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontWeight:800,fontSize:16}}>＋ Adicionar à lista</div>
+              <button onClick={()=>setShowAddShopping(false)}
+                style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                  padding:"5px 12px",cursor:"pointer",fontSize:13,color:C.muted}}>✕</button>
+            </div>
+
+            <div style={{overflowY:"auto",flex:1}}>
+              {!meatsCatalog?.length
+                ? <div style={{color:C.muted,textAlign:"center",padding:20}}>
+                    Nenhum item no histórico ainda.
+                  </div>
+                : meatsCatalog.map((item,i)=>{
+                    const key=`${item.tipo}:${item.corte}:${item.origem}:${item.utilidade}`;
+                    const jaAdicionado=(shoppingList||[]).some(
+                      s=>s.nome===item.corte&&s.tipo===item.tipo
+                    );
+                    return (
+                      <button key={key} onClick={()=>{
+                        if(!jaAdicionado){
+                          onAddToShoppingList(item.corte,item.tipo,item.origem,item.utilidade);
+                        }
+                        setShowAddShopping(false);
+                      }}
+                        style={{width:"100%",display:"flex",justifyContent:"space-between",
+                          alignItems:"center",padding:"10px 12px",marginBottom:4,
+                          background:jaAdicionado?C.success+"11":C.card,
+                          border:`1px solid ${jaAdicionado?C.success:C.border}`,
+                          borderRadius:10,cursor:"pointer",textAlign:"left"}}>
+                        <div>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text}}>{item.corte}</div>
+                          <div style={{fontSize:11,color:C.muted,marginTop:2,textTransform:"capitalize"}}>
+                            {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
+                          </div>
+                        </div>
+                        {jaAdicionado
+                          ? <span style={{fontSize:11,color:C.success,fontWeight:700}}>✓ Na lista</span>
+                          : <span style={{fontSize:18,color:C.success}}>＋</span>
+                        }
+                      </button>
+                    );
+                  })
+              }
+            </div>
+          </div>
         </div>
       )}
 
@@ -1732,7 +1793,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                                 if(novoTotal<=0){
                                   closeModal();
                                   if(window.confirm(`Acabou o estoque de "${detail.corte||detail.tipo}".\n\nAdicionar à lista de compras?`)){
-                                    onAddToShoppingList(detail.corte||detail.tipo, detail.tipo);
+                                    onAddToShoppingList(detail.corte||detail.tipo, detail.tipo, detail.origem||"", detail.utilidade||"");
                                   }
                                 }
                               }}
@@ -3193,13 +3254,26 @@ export default function App() {
   const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
 
   // ── LISTA DE COMPRAS ────────────────────────────────────────────────────────
-  const addToShoppingList = (nome, tipo) => {
+  const addToShoppingList = (nome, tipo, origem="", utilidade="") => {
     setShoppingList(prev=>{
-      if(prev.some(i=>i.nome.toLowerCase()===nome.toLowerCase())) return prev;
-      return [...prev, {id:uid(), nome, tipo, addedBy:currentUser, addedAt:TODAY}];
+      if(prev.some(i=>i.nome.toLowerCase()===nome.toLowerCase()&&i.tipo===tipo)) return prev;
+      return [...prev, {id:uid(), nome, tipo, origem, utilidade, addedBy:currentUser, addedAt:TODAY}];
     });
   };
   const removeFromShoppingList = (id) => setShoppingList(p=>p.filter(i=>i.id!==id));
+
+  // Catálogo de itens já conhecidos (ativo + consumido) para a lista de compras
+  const meatsCatalog = (()=>{
+    const seen = new Set();
+    return meats
+      .map(m=>({corte:m.corte||m.tipo, tipo:m.tipo||"", origem:m.origem||"", utilidade:m.utilidade||""}))
+      .filter(item=>{
+        const key=`${item.tipo}:${item.corte}:${item.origem}:${item.utilidade}`;
+        if(seen.has(key)) return false;
+        seen.add(key); return true;
+      })
+      .sort((a,b)=>a.corte.localeCompare(b.corte,"pt"));
+  })();
 
   // ── CHURRASCO ──────────────────────────────────────────────────────────────
   const togglePacoteChurrasco = (meatId, pacoteId) => {
@@ -3245,7 +3319,7 @@ export default function App() {
     if(esgotados.length>0){
       const nomes = esgotados.map(m=>m.corte||m.tipo).join(", ");
       if(window.confirm(`Acabou o estoque de: ${nomes}.\n\nAdicionar à lista de compras?`)){
-        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo, m.tipo));
+        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo, m.tipo, m.origem||"", m.utilidade||""));
       }
     }
   };
@@ -3465,7 +3539,7 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={deleteMeat} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
