@@ -374,7 +374,6 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
             {/* ── BLOCO 1: Estoque ── */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
               <div style={{fontWeight:800,fontSize:15,color:C.info,marginBottom:12}}>📦 Estoque</div>
-
               {/* Filtros */}
               <div style={{marginBottom:12,display:"flex",flexDirection:"column",gap:8}}>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -382,9 +381,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   {["todos",...(appConfig?.locais||LOCAIS).filter(l=>meats.some(m=>m.local===l))].map(l=>(
                     <button key={l} onClick={()=>setPfLocal(l)}
                       style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        background:pfLocal===l?C.info+"22":C.light,
-                        border:`1px solid ${pfLocal===l?C.info:C.border}`,
-                        color:pfLocal===l?C.info:C.muted}}>
+                        background:pfLocal===l?C.info+"22":C.light, border:`1px solid ${pfLocal===l?C.info:C.border}`, color:pfLocal===l?C.info:C.muted}}>
                       {l==="todos"?"Todos":l}
                     </button>
                   ))}
@@ -393,11 +390,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>TIPO</span>
                   {["todos",...(appConfig?.tipos||TIPOS).filter(t=>meats.some(m=>m.tipo===t))].map(t=>(
                     <button key={t} onClick={()=>setPfTipo(t)}
-                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        textTransform:"capitalize",
-                        background:pfTipo===t?C.info+"22":C.light,
-                        border:`1px solid ${pfTipo===t?C.info:C.border}`,
-                        color:pfTipo===t?C.info:C.muted}}>
+                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,textTransform:"capitalize",
+                        background:pfTipo===t?C.info+"22":C.light, border:`1px solid ${pfTipo===t?C.info:C.border}`, color:pfTipo===t?C.info:C.muted}}>
                       {t==="todos"?"Todos":t}
                     </button>
                   ))}
@@ -407,9 +401,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   {["todos",...(appConfig?.origens||ORIGENS).filter(o=>meats.some(m=>m.origem===o))].map(o=>(
                     <button key={o} onClick={()=>setPfOrigem(o)}
                       style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        background:pfOrigem===o?C.info+"22":C.light,
-                        border:`1px solid ${pfOrigem===o?C.info:C.border}`,
-                        color:pfOrigem===o?C.info:C.muted}}>
+                        background:pfOrigem===o?C.info+"22":C.light, border:`1px solid ${pfOrigem===o?C.info:C.border}`, color:pfOrigem===o?C.info:C.muted}}>
                       {o==="todos"?"Todas":o}
                     </button>
                   ))}
@@ -419,261 +411,159 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   {["todos",...(appConfig?.utilidades||["churrasco","consumo"]).filter(u=>meats.some(m=>m.utilidade===u))].map(u=>(
                     <button key={u} onClick={()=>setPfUtil(u)}
                       style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
-                        background:pfUtil===u?C.info+"22":C.light,
-                        border:`1px solid ${pfUtil===u?C.info:C.border}`,
-                        color:pfUtil===u?C.info:C.muted}}>
+                        background:pfUtil===u?C.info+"22":C.light, border:`1px solid ${pfUtil===u?C.info:C.border}`, color:pfUtil===u?C.info:C.muted}}>
                       {u==="todos"?"Todas":u}
                     </button>
                   ))}
                 </div>
               </div>
-
-              {/* Lista filtrada */}
-              {(()=>{
+              <button onClick={()=>{
                 const filtered=meats
                   .filter(m=>pfLocal==="todos"||m.local===pfLocal)
                   .filter(m=>pfTipo==="todos"||m.tipo===pfTipo)
                   .filter(m=>pfOrigem==="todos"||m.origem===pfOrigem)
                   .filter(m=>pfUtil==="todos"||m.utilidade===pfUtil);
+                if(!filtered.length){alert("Nenhum item com esses filtros.");return;}
                 const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
-                return (
-                  <>
-                    {filtered.length===0
-                      ? <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum item com esses filtros.</div>
-                      : filtered.map(m=>(
-                          <div key={m.id} style={{display:"flex",justifyContent:"space-between",
-                            padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-                            <div>
-                              <span style={{fontWeight:600}}>{m.corte||m.tipo}</span>
-                              <span style={{fontSize:11,color:C.muted,marginLeft:6,textTransform:"capitalize"}}>{m.tipo}</span>
-                              <span style={{fontSize:11,color:C.muted}}> · {m.local}</span>
-                            </div>
-                            <span style={{fontWeight:700,color:C.info}}>{fmtKg(m.pesoTotal)}</span>
-                          </div>
-                        ))
-                    }
-                    {filtered.length>0&&(
-                      <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,
-                        padding:"8px 0 4px",fontSize:13,color:C.info}}>
-                        <span>{filtered.length} item{filtered.length!==1?"s":""}</span>
-                        <span>{fmtKg(total)}</span>
-                      </div>
-                    )}
-                    <button onClick={()=>{
-                      const locais=[...new Set(filtered.map(m=>m.local).filter(Boolean))];
-                      const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-                      const body=locais.map(local=>{
-                        const items=filtered.filter(m=>m.local===local);
-                        const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
-                        return `<h3 style="margin:16px 0 4px;border-bottom:1px solid #ccc">📍 ${local}</h3>
-                        <table style="width:100%;border-collapse:collapse;font-size:13px">
-                          <thead><tr style="background:#f0f0f0">
-                            <th style="text-align:left;padding:4px 8px">Corte</th>
-                            <th style="text-align:left;padding:4px 8px">Tipo</th>
-                            <th style="text-align:left;padding:4px 8px">Origem</th>
-                            <th style="text-align:left;padding:4px 8px">Pacotes</th>
-                            <th style="text-align:right;padding:4px 8px">Peso</th>
-                          </tr></thead>
-                          <tbody>${items.map(m=>`<tr>
-                            <td style="padding:4px 8px">${m.corte||m.tipo}</td>
-                            <td style="padding:4px 8px;text-transform:capitalize">${m.tipo}</td>
-                            <td style="padding:4px 8px">${m.origem||"—"}</td>
-                            <td style="padding:4px 8px">${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
-                            <td style="padding:4px 8px;text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
-                          </tr>`).join("")}</tbody>
-                          <tfoot><tr style="font-weight:700;background:#f9f9f9">
-                            <td colspan="4" style="padding:4px 8px">Total</td>
-                            <td style="padding:4px 8px;text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
-                          </tr></tfoot>
-                        </table>`;
-                      }).join("");
-                      const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Estoque</title>
-                        <style>
-                          body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
-                          h1{margin:0;font-size:22px;color:#1565c0}
-                          h3{margin:20px 0 6px;font-size:14px;color:#333}
-                          table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
-                          th{text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px}
-                          td{padding:5px 8px;border-bottom:1px solid #eee}
-                          tfoot td{font-weight:700;background:#f9f9f9;border-top:1px solid #ccc}
-                          .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                          @media print{body{padding:0}.close-btn{display:none}}
-                        </style>
-                      </head><body>
-                        <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
-                          <h1>📦 Estoque Atual</h1>
-                          <span style="font-size:12px;color:#666">${now}</span>
-                        </div>
-                        <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${fmtKg(total)}</strong></p>
-                        ${locais.map(local=>{
-                          const items=filtered.filter(m=>m.local===local);
-                          const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
-                          return `<h3>📍 ${local}</h3>
-                          <table>
-                            <thead><tr>
-                              <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
-                            </tr></thead>
-                            <tbody>${items.map(m=>`<tr>
-                              <td>${m.corte||m.tipo}</td>
-                              <td style="text-transform:capitalize">${m.tipo}</td>
-                              <td>${m.origem||"—"}</td>
-                              <td style="text-transform:capitalize">${m.utilidade||"—"}</td>
-                              <td>${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
-                              <td style="text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
-                            </tr>`).join("")}</tbody>
-                            <tfoot><tr>
-                              <td colspan="5">Total ${local}</td>
-                              <td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
-                            </tr></tfoot>
-                          </table>`;
-                        }).join("")}
-                        <script>window.onload=()=>window.print()<\/script>
-                      </body></html>`;
-                      const w=window.open("","_blank");
-                      if(w){w.document.write(html);w.document.close();}
-                    }} style={{marginTop:10,width:"100%",background:C.info,border:"none",
-                      borderRadius:10,padding:"11px",cursor:"pointer",
-                      color:"#fff",fontSize:13,fontWeight:700}}>
-                      🖨️ Imprimir Estoque
-                    </button>
-                  </>
-                );
-              })()}
+                const locais=[...new Set(filtered.map(m=>m.local).filter(Boolean))];
+                const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Estoque</title>
+                  <style>
+                    body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
+                    h1{margin:0;font-size:22px;color:#1565c0} h3{margin:20px 0 6px;font-size:14px;color:#333}
+                    table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
+                    th{text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px}
+                    td{padding:5px 8px;border-bottom:1px solid #eee}
+                    tfoot td{font-weight:700;background:#f9f9f9;border-top:1px solid #ccc}
+                    .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                    @media print{body{padding:0}.close-btn{display:none}}
+                  </style></head><body>
+                  <button class="close-btn" onclick="window.close()">✕ Fechar</button>
+                  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
+                    <h1>📦 Estoque Atual</h1><span style="font-size:12px;color:#666">${now}</span>
+                  </div>
+                  <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${total.toFixed(3).replace(".",",")} kg</strong></p>
+                  ${locais.map(local=>{
+                    const items=filtered.filter(m=>m.local===local);
+                    const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
+                    return `<h3>📍 ${local}</h3>
+                    <table><thead><tr>
+                      <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                    </tr></thead>
+                    <tbody>${items.map(m=>`<tr>
+                      <td>${m.corte||m.tipo}</td>
+                      <td style="text-transform:capitalize">${m.tipo}</td>
+                      <td>${m.origem||"—"}</td>
+                      <td style="text-transform:capitalize">${m.utilidade||"—"}</td>
+                      <td>${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
+                      <td style="text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
+                    </tr>`).join("")}</tbody>
+                    <tfoot><tr><td colspan="5">Total ${local}</td><td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
+                    </table>`;
+                  }).join("")}
+                  <script>window.onload=()=>window.print()<\/script>
+                </body></html>`;
+                const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
+              }} style={{width:"100%",background:C.info,border:"none",borderRadius:10,
+                padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
+                🖨️ Gerar impressão do Estoque
+              </button>
             </div>
 
             {/* ── BLOCO 2: Preparar Churrasco ── */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
               <div style={{fontWeight:800,fontSize:15,color:C.primary,marginBottom:12}}>🔥 Preparar Churrasco</div>
-              {!pacotesChurrasco?.length
-                ? <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum pacote marcado para churrasco.</div>
-                : (()=>{
-                    const grupos={};
-                    pacotesChurrasco.forEach(p=>{
-                      if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",utilidade:p.utilidade||"—",kg:0,n:0};
-                      grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
-                    });
-                    return (
-                      <>
-                        {Object.values(grupos).map(g=>(
-                          <div key={g.corte} style={{display:"flex",justifyContent:"space-between",
-                            padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-                            <div>
-                              <span style={{fontWeight:600}}>{g.corte}</span>
-                              <span style={{fontSize:11,color:C.muted,marginLeft:6}}>{g.n} pct · {g.local}</span>
-                            </div>
-                            <span style={{fontWeight:700,color:C.primary}}>{fmtKg(g.kg)}</span>
-                          </div>
-                        ))}
-                        <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,
-                          padding:"8px 0 4px",fontSize:13,color:C.primary}}>
-                          <span>Total</span><span>{fmtKg(totalChurrascoKg)}</span>
-                        </div>
-                        <button onClick={()=>{
-                          const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-                          const rows=Object.values(grupos).map(g=>`<tr>
-                            <td style="font-weight:600">${g.corte}</td>
-                            <td style="text-transform:capitalize">${g.tipo}</td>
-                            <td>${g.origem}</td>
-                            <td style="text-transform:capitalize">${g.utilidade}</td>
-                            <td>${g.n} pct</td>
-                            <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
-                          </tr>`).join("");
-                          const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
-                            <style>
-                              body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
-                              h1{margin:0;font-size:22px;color:#e65c00}
-                              table{width:100%;border-collapse:collapse;font-size:13px}
-                              th{text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px}
-                              td{padding:5px 8px;border-bottom:1px solid #eee}
-                              tfoot td{font-weight:700;background:#fff8f0;border-top:1px solid #ccc}
-                              .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                              @media print{body{padding:0}.close-btn{display:none}}
-                            </style>
-                          </head><body>
-                            <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
-                              <h1>🔥 Preparar Churrasco</h1>
-                              <span style="font-size:12px;color:#666">${now}</span>
-                            </div>
-                            <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
-                            <table>
-                              <thead><tr>
-                                <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
-                              </tr></thead>
-                              <tbody>${rows}</tbody>
-                              <tfoot><tr>
-                                <td colspan="5">Total</td>
-                                <td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td>
-                              </tr></tfoot>
-                            </table>
-                            <script>window.onload=()=>window.print()<\/script>
-                          </body></html>`;
-                          const w=window.open("","_blank");
-                          if(w){w.document.write(html);w.document.close();}
-                        }} style={{marginTop:10,width:"100%",background:C.primary,border:"none",
-                          borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
-                          🖨️ Imprimir Churrasco
-                        </button>
-                      </>
-                    );
-                  })()
-              }
+              <div style={{fontSize:13,color:C.muted,marginBottom:12}}>
+                {pacotesChurrasco?.length>0
+                  ? `${pacotesChurrasco.length} pacote${pacotesChurrasco.length!==1?"s":""} selecionado${pacotesChurrasco.length!==1?"s":""} · ${fmtKg(totalChurrascoKg)}`
+                  : "Nenhum pacote marcado para churrasco."}
+              </div>
+              <button onClick={()=>{
+                if(!pacotesChurrasco?.length){alert("Nenhum pacote marcado para churrasco.");return;}
+                const grupos={};
+                pacotesChurrasco.forEach(p=>{
+                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",utilidade:p.utilidade||"—",kg:0,n:0};
+                  grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
+                });
+                const rows=Object.values(grupos).map(g=>`<tr>
+                  <td style="font-weight:600">${g.corte}</td>
+                  <td style="text-transform:capitalize">${g.tipo}</td>
+                  <td>${g.origem}</td>
+                  <td style="text-transform:capitalize">${g.utilidade}</td>
+                  <td>${g.n} pct</td>
+                  <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+                </tr>`).join("");
+                const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
+                  <style>
+                    body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
+                    h1{margin:0;font-size:22px;color:#e65c00}
+                    table{width:100%;border-collapse:collapse;font-size:13px}
+                    th{text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px}
+                    td{padding:5px 8px;border-bottom:1px solid #eee}
+                    tfoot td{font-weight:700;background:#fff8f0;border-top:1px solid #ccc}
+                    .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                    @media print{body{padding:0}.close-btn{display:none}}
+                  </style></head><body>
+                  <button class="close-btn" onclick="window.close()">✕ Fechar</button>
+                  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
+                    <h1>🔥 Preparar Churrasco</h1><span style="font-size:12px;color:#666">${now}</span>
+                  </div>
+                  <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
+                  <table><thead><tr>
+                    <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                  </tr></thead>
+                  <tbody>${rows}</tbody>
+                  <tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
+                  </table>
+                  <script>window.onload=()=>window.print()<\/script>
+                </body></html>`;
+                const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
+              }} style={{width:"100%",background:C.primary,border:"none",borderRadius:10,
+                padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
+                🖨️ Gerar impressão do Churrasco
+              </button>
             </div>
 
             {/* ── BLOCO 3: Lista de Compras ── */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14}}>
               <div style={{fontWeight:800,fontSize:15,color:C.success,marginBottom:12}}>🛒 Lista de Compras</div>
-              {!shoppingList?.length
-                ? <div style={{color:C.muted,textAlign:"center",padding:8}}>Lista de compras vazia.</div>
-                : (
-                  <>
-                    {shoppingList.map(i=>(
-                      <div key={i.id} style={{display:"flex",justifyContent:"space-between",
-                        padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-                        <span style={{fontWeight:600}}>{i.nome}</span>
-                        <span style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{i.tipo||""}</span>
-                      </div>
-                    ))}
-                    <button onClick={()=>{
-                      const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-                      const rows=(shoppingList||[]).map(i=>`<tr>
-                        <td style="font-weight:600">☐  ${i.nome}</td>
-                        <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
-                      </tr>`).join("");
-                      const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
-                        <style>
-                          body{font-family:Arial,sans-serif;padding:24px;max-width:700px;margin:0 auto;color:#222}
-                          h1{margin:0;font-size:22px;color:#2e7d32}
-                          table{width:100%;border-collapse:collapse;font-size:14px}
-                          th{text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px}
-                          td{padding:7px 8px;border-bottom:1px solid #eee;font-size:14px}
-                          .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                          @media print{body{padding:0}.close-btn{display:none}}
-                        </style>
-                      </head><body>
-                        <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
-                          <h1>🛒 Lista de Compras</h1>
-                          <span style="font-size:12px;color:#666">${now}</span>
-                        </div>
-                        <table>
-                          <thead><tr><th>Item</th><th>Tipo</th></tr></thead>
-                          <tbody>${rows}</tbody>
-                        </table>
-                        <script>window.onload=()=>window.print()<\/script>
-                      </body></html>`;
-                      const w=window.open("","_blank");
-                      if(w){w.document.write(html);w.document.close();}
-                    }} style={{marginTop:10,width:"100%",background:C.success,border:"none",
-                      borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
-                      🖨️ Imprimir Lista de Compras
-                    </button>
-                  </>
-                )
-              }
+              <div style={{fontSize:13,color:C.muted,marginBottom:12}}>
+                {shoppingList?.length>0
+                  ? `${shoppingList.length} item${shoppingList.length!==1?"ns":""} na lista`
+                  : "Lista de compras vazia."}
+              </div>
+              <button onClick={()=>{
+                if(!shoppingList?.length){alert("Lista de compras vazia.");return;}
+                const rows=(shoppingList||[]).map(i=>`<tr>
+                  <td style="font-weight:600">☐  ${i.nome}</td>
+                  <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
+                </tr>`).join("");
+                const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
+                  <style>
+                    body{font-family:Arial,sans-serif;padding:24px;max-width:700px;margin:0 auto;color:#222}
+                    h1{margin:0;font-size:22px;color:#2e7d32}
+                    table{width:100%;border-collapse:collapse;font-size:14px}
+                    th{text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px}
+                    td{padding:7px 8px;border-bottom:1px solid #eee}
+                    .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                    @media print{body{padding:0}.close-btn{display:none}}
+                  </style></head><body>
+                  <button class="close-btn" onclick="window.close()">✕ Fechar</button>
+                  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
+                    <h1>🛒 Lista de Compras</h1><span style="font-size:12px;color:#666">${now}</span>
+                  </div>
+                  <table><thead><tr><th>Item</th><th>Tipo</th></tr></thead>
+                  <tbody>${rows}</tbody></table>
+                  <script>window.onload=()=>window.print()<\/script>
+                </body></html>`;
+                const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
+              }} style={{width:"100%",background:C.success,border:"none",borderRadius:10,
+                padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
+                🖨️ Gerar impressão da Lista de Compras
+              </button>
             </div>
-
           </div>
         </div>
       )}
@@ -1079,12 +969,13 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
   const hasFilter   = flocal!=="todos"||futilidade!=="todos"||forigem!=="todos"||ftipo!=="todos"||fcorte;
   const clearAll    = () => { setFlocal("todos");setFutilidade("todos");setForigem("todos");setFtipo("todos");setFcorte(""); };
 
+  const norm = s => (s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const filtered = meats
     .filter(m=>flocal==="todos"     ||m.local===flocal)
     .filter(m=>futilidade==="todos" ||m.utilidade===futilidade)
     .filter(m=>forigem==="todos"    ||m.origem===forigem)
     .filter(m=>ftipo==="todos"      ||m.tipo===ftipo)
-    .filter(m=>!fcorte              ||(m.corte||m.tipo).toLowerCase().includes(fcorte.toLowerCase()))
+    .filter(m=>!fcorte              ||norm(m.corte||m.tipo).includes(norm(fcorte))||norm(m.tipo).includes(norm(fcorte)))
     .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
 
   const detail = meats.find(m=>m.id===selected);
