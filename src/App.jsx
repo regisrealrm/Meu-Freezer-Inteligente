@@ -2746,30 +2746,95 @@ function Churrasometro({meats, catalog}) {
 
 // ─── RELATÓRIOS ───────────────────────────────────────────────────────────────
 function Relatorios({meats,exits}) {
+  const hoje = TODAY;
+  const primeiroDiaMes = hoje.slice(0,7)+"-01";
+
+  const [dataInicio, setDataInicio] = React.useState(primeiroDiaMes);
+  const [dataFim,    setDataFim]    = React.useState(hoje);
+  const [mostrar,    setMostrar]    = React.useState(false);
+
   const active    = meats.filter(m=>m.status!=="consumido"&&m.pesoTotal>0);
   const totalKg   = active.reduce((s,m)=>s+m.pesoTotal,0);
   const totalInv  = meats.reduce((s,m)=>s+(m.precoPago||0),0);
   const totalCons = exits.reduce((s,e)=>s+e.pesoRetirado,0);
   const totalDesc = exits.filter(e=>e.motivo==="descarte").reduce((s,e)=>s+e.pesoRetirado,0);
 
+  // Filtra por período
+  const inRange = (dateStr) => {
+    if(!dateStr) return true;
+    const d = dateStr.slice(0,10);
+    return d >= dataInicio && d <= dataFim;
+  };
+
+  const exitsRange    = exits.filter(e=>inRange(e.dataSaida));
+  const meatsRange    = meats.filter(m=>inRange(m.dataEntrada));
+  const transfers     = [...exitsRange].filter(e=>e.motivo==="transferência").reverse();
+  const saidas        = exitsRange.filter(e=>e.motivo!=="transferência");
+  const locaisComSaida= [...new Set(saidas.map(e=>e.local).filter(Boolean))];
+
   return (
     <div>
       <SecTitle icon="📊" children="Relatórios"/>
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:20}}>
+
+      {/* KPI Cards — sempre com todos os dados */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
         <StatCard icon="🧊" label="Estoque atual"    value={fmtKg(totalKg)}    color={C.primary}/>
         <StatCard icon="✅" label="Total consumido"  value={fmtKg(totalCons)}  color={C.success}/>
         <StatCard icon="💰" label="Total investido"  value={fmtR(totalInv)||"R$ 0,00"} color={C.info}/>
         <StatCard icon="🗑️" label="Total descartado" value={fmtKg(totalDesc)}  color={totalDesc>0?C.danger:C.muted}/>
       </div>
 
-      {/* Histórico de transferências */}
-      {(()=>{
-        const transfers = [...exits].filter(e=>e.motivo==="transferência").reverse();
-        return (
+      {/* Filtro de período */}
+      <Card style={{marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📅 Período dos históricos</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          <div>
+            <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>De</div>
+            <input type="date" value={dataInicio} onChange={e=>setDataInicio(e.target.value)}
+              style={{...inputBase,width:"100%",padding:"9px 10px",fontSize:14,boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>Até</div>
+            <input type="date" value={dataFim} onChange={e=>setDataFim(e.target.value)}
+              style={{...inputBase,width:"100%",padding:"9px 10px",fontSize:14,boxSizing:"border-box"}}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:mostrar?12:0,flexWrap:"wrap"}}>
+          {[
+            {l:"Este mês",   di:hoje.slice(0,7)+"-01", df:hoje},
+            {l:"Mês passado",di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)+"-01";})(),
+                             df:(()=>{const d=new Date(hoje);d.setDate(0);return d.toISOString().slice(0,10);})()},
+            {l:"Últimos 3 meses",di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-3);return d.toISOString().slice(0,10);})(), df:hoje},
+            {l:"Este ano",   di:hoje.slice(0,4)+"-01-01", df:hoje},
+          ].map(({l,di,df})=>(
+            <button key={l} onClick={()=>{setDataInicio(di);setDataFim(df);setMostrar(false);}}
+              style={{fontSize:11,padding:"5px 10px",borderRadius:8,cursor:"pointer",fontWeight:600,
+                background:(dataInicio===di&&dataFim===df)?C.info+"22":C.light,
+                border:`1px solid ${(dataInicio===di&&dataFim===df)?C.info:C.border}`,
+                color:(dataInicio===di&&dataFim===df)?C.info:C.muted}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <button onClick={()=>setMostrar(true)}
+          style={{width:"100%",background:C.info,border:"none",borderRadius:10,
+            padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
+          📋 Gerar históricos
+        </button>
+      </Card>
+
+      {mostrar&&(
+        <>
+          <div style={{fontSize:12,color:C.muted,textAlign:"center",marginBottom:12}}>
+            {fmtDate(dataInicio)} até {fmtDate(dataFim)}
+            {" · "}{meatsRange.length} entr · {transfers.length} transf · {saidas.length} saíd
+          </div>
+
+          {/* Histórico de transferências */}
           <Card style={{marginBottom:14}}>
             <div style={{fontWeight:700,marginBottom:10}}>🔄 Histórico de transferências ({transfers.length})</div>
             {transfers.length===0
-              ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma transferência registrada.</div>
+              ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma transferência no período.</div>
               :transfers.map(e=>(
                 <div key={e.id} style={{display:"flex",justifyContent:"space-between",
                   alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
@@ -2780,8 +2845,7 @@ function Relatorios({meats,exits}) {
                     <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)}</span>
                     {e.observacao&&<span style={{fontSize:12,color:C.info}}> · {e.observacao}</span>}
                     {e.feitorPor&&(
-                      <span style={{fontSize:11,
-                        background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
+                      <span style={{fontSize:11,background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
                         color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
                         padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
                         {e.feitorPor}
@@ -2793,56 +2857,46 @@ function Relatorios({meats,exits}) {
               ))
             }
           </Card>
-        );
-      })()}
 
-      {/* Histórico de Entradas */}
-      <Card style={{marginBottom:14}}>
-        <div style={{fontWeight:700,marginBottom:10}}>📥 Histórico de entradas ({meats.length})</div>
-        {meats.length===0
-          ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma entrada registrada.</div>
-          :[...meats].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(m=>(
-            <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-              padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
-              <div>
-                <span style={{fontWeight:600}}>{m.corte||m.tipo}</span>
-                <span style={{fontSize:11,color:C.muted,background:C.light,
-                  padding:"1px 6px",borderRadius:4,marginLeft:6}}>{m.tipo}</span>
-                <span style={{fontSize:12,color:C.muted}}> · {fmtDate(m.dataEntrada)} · {m.local}</span>
-                {m.precoPago&&<span style={{fontSize:12,color:C.muted}}> · {fmtR(m.precoPago)}</span>}
-                {m.feitorPor&&(
-                  <span style={{fontSize:11,
-                    background:`hsl(${USERS.indexOf(m.feitorPor)*90},60%,20%)`,
-                    color:`hsl(${USERS.indexOf(m.feitorPor)*90},70%,65%)`,
-                    padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
-                    {m.feitorPor}
-                  </span>
-                )}
-              </div>
-              <strong style={{color:C.success}}>+{fmtKg(m.pesoInicial||m.pesoTotal)}</strong>
-            </div>
-          ))
-        }
-      </Card>
+          {/* Histórico de Entradas */}
+          <Card style={{marginBottom:14}}>
+            <div style={{fontWeight:700,marginBottom:10}}>📥 Histórico de entradas ({meatsRange.length})</div>
+            {meatsRange.length===0
+              ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma entrada no período.</div>
+              :[...meatsRange].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(m=>(
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+                  <div>
+                    <span style={{fontWeight:600}}>{m.corte||m.tipo}</span>
+                    <span style={{fontSize:11,color:C.muted,background:C.light,
+                      padding:"1px 6px",borderRadius:4,marginLeft:6}}>{m.tipo}</span>
+                    <span style={{fontSize:12,color:C.muted}}> · {fmtDate(m.dataEntrada)} · {m.local}</span>
+                    {m.precoPago&&<span style={{fontSize:12,color:C.muted}}> · {fmtR(m.precoPago)}</span>}
+                    {m.feitorPor&&(
+                      <span style={{fontSize:11,background:`hsl(${USERS.indexOf(m.feitorPor)*90},60%,20%)`,
+                        color:`hsl(${USERS.indexOf(m.feitorPor)*90},70%,65%)`,
+                        padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
+                        {m.feitorPor}
+                      </span>
+                    )}
+                  </div>
+                  <strong style={{color:C.success}}>+{fmtKg(m.pesoInicial||m.pesoTotal)}</strong>
+                </div>
+              ))
+            }
+          </Card>
 
-      {/* Histórico de saídas — com filtro por freezer */}
-      {(()=>{
-        const saidas = exits.filter(e=>e.motivo!=="transferência");
-        const locaisComSaida = [...new Set(saidas.map(e=>e.local).filter(Boolean))];
-        return (
+          {/* Histórico de saídas — agrupado por freezer se > 1 local */}
           <Card>
-            <div style={{fontWeight:700,marginBottom:10}}>
-              📋 Histórico de saídas ({saidas.length})
-            </div>
+            <div style={{fontWeight:700,marginBottom:10}}>📋 Histórico de saídas ({saidas.length})</div>
             {saidas.length===0
-              ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma saída registrada.</div>
+              ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma saída no período.</div>
               : (
                 <>
-                  {/* Saídas por freezer */}
                   {locaisComSaida.length>1&&locaisComSaida.map(local=>{
-                    const items = [...saidas].filter(e=>e.local===local).reverse();
+                    const items=[...saidas].filter(e=>e.local===local).reverse();
                     if(!items.length) return null;
-                    const totalLocal = items.reduce((s,e)=>s+e.pesoRetirado,0);
+                    const totalLocal=items.reduce((s,e)=>s+e.pesoRetirado,0);
                     return (
                       <div key={local} style={{marginBottom:16}}>
                         <div style={{fontSize:12,fontWeight:700,color:C.info,
@@ -2853,14 +2907,12 @@ function Relatorios({meats,exits}) {
                         </div>
                         {items.map(e=>(
                           <div key={e.id} style={{display:"flex",justifyContent:"space-between",
-                            alignItems:"center",padding:"6px 8px",
-                            borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+                            alignItems:"center",padding:"6px 8px",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
                             <div>
                               <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
                               <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
                               <span style={{fontSize:12,fontWeight:600,color:
-                                e.motivo==="churrasco"?C.primary:
-                                e.motivo==="descarte"?C.danger:C.success}}>
+                                e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:C.success}}>
                                 {e.motivo}
                               </span>
                             </div>
@@ -2870,19 +2922,16 @@ function Relatorios({meats,exits}) {
                       </div>
                     );
                   })}
-                  {/* Saídas sem local ou lista geral (se só 1 local) */}
                   {locaisComSaida.length<=1&&[...saidas].reverse().map(e=>(
                     <div key={e.id} style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"center",padding:"8px 0",
-                      borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
+                      alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
                       <div>
                         <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
                         {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
                           padding:"1px 6px",borderRadius:4,marginLeft:6}}>{e.tipo}</span>}
                         <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
                         <span style={{fontSize:12,fontWeight:600,color:
-                          e.motivo==="churrasco"?C.primary:
-                          e.motivo==="descarte"?C.danger:C.success}}>
+                          e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:C.success}}>
                           {e.motivo}
                         </span>
                         {e.feitorPor&&(
@@ -2900,238 +2949,12 @@ function Relatorios({meats,exits}) {
               )
             }
           </Card>
-        );
-      })()}
-    </div>
-  );
-}
-
-// ─── ROOT ──────────────────────────────────────────────────────────────────────
-const STORAGE_KEY  = "mfi3_data";
-const FIREBASE_REST = `https://meu-freezer-inteligente-default-rtdb.firebaseio.com/${DB_PATH}.json`;
-
-// ─── AJUSTES ──────────────────────────────────────────────────────────────────
-// ─── AJUSTES ──────────────────────────────────────────────────────────────────
-function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUpdateMeats,onRenameMeatField,onClearHistory}) {
-  const [editingSection,setEditingSection] = useState(null);
-  const [newItem,       setNewItem]        = useState("");
-  const [editIdx,       setEditIdx]        = useState(null);
-  const [editVal,       setEditVal]        = useState("");
-  const [newCorte,      setNewCorte]       = useState("");
-
-  const sections = [
-    {key:"tipos",      title:"Tipos de carne",          icon:"🥩", color:C.primary,  field:"tipo"},
-    {key:"locais",     title:"Locais de armazenamento",  icon:"📍", color:C.info,     field:"local"},
-    {key:"origens",    title:"Origens",                  icon:"🌿", color:C.success,  field:"origem"},
-    {key:"utilidades", title:"Utilidades",               icon:"🎯", color:C.warning,  field:"utilidade"},
-  ];
-
-  const openSection = (key) => {
-    setEditingSection(s=>s===key?null:key);
-    setEditIdx(null); setEditVal(""); setNewItem("");
-  };
-
-  const addItem = (key) => {
-    const val = newItem.trim();
-    if(!val) return;
-    if((config[key]||[]).some(v=>v.toLowerCase()===val.toLowerCase())) return alert("Já existe.");
-    onUpdateConfig({...config,[key]:[...(config[key]||[]),val]});
-    setNewItem("");
-  };
-
-  const deleteItem = (key,idx) => {
-    onUpdateConfig({...config,[key]:(config[key]||[]).filter((_,i)=>i!==idx)});
-  };
-
-  const clearSection = (key) => {
-    if(!window.confirm(`Limpar todos os itens de "${key}"?`)) return;
-    onUpdateConfig({...config,[key]:[]});
-  };
-
-  const addCorte = () => {
-    const nome = newCorte.trim();
-    if(!nome) return;
-    const key = nome.toLowerCase();
-    if(catalog.some(c=>c.key===key)) return alert("Corte já existe.");
-    onUpdateCatalog([...catalog, {id:uid(), nome, tipo:"", key}]);
-    setNewCorte("");
-  };
-
-  // Salva edição de seção — propaga renomeação para todos os itens
-  const saveEdit = (key,field) => {
-    const val = editVal.trim();
-    if(!val) return;
-    const oldVal = (config[key]||[])[editIdx];
-    if(oldVal===undefined||oldVal===null) return;
-
-    // 1. Atualiza config
-    const updated = [...(config[key]||[])];
-    updated[editIdx] = val;
-    onUpdateConfig({...config,[key]:updated});
-
-    // 2. Propaga para estoque — usa meats prop diretamente (sem functional update)
-    if(field && oldVal !== val && meats?.length) {
-      const renamed = meats.map(m => m[field]===oldVal ? {...m,[field]:val} : m);
-      onUpdateMeats(renamed);
-    }
-
-    setEditIdx(null); setEditVal("");
-  };
-
-  // Salva edição de corte do catálogo
-  const saveCorteEdit = (idx) => {
-    const val = editVal.trim();
-    if(!val) return;
-    const oldNome = catalog[idx]?.nome;
-    if(!oldNome) return;
-    const updatedCatalog = catalog.map((c,i)=>
-      i===idx ? {...c, nome:val, key:`${c.tipo}:${val.toLowerCase()}`} : c
-    );
-    onUpdateCatalog(updatedCatalog);
-    // Propaga para estoque
-    if(meats?.length) {
-      const renamed = meats.map(m => m.corte===oldNome ? {...m,corte:val} : m);
-      onUpdateMeats(renamed);
-    }
-    setEditIdx(null); setEditVal("");
-  };
-
-  const ItemRow = ({label,sub,idx,onSave,onDelete}) => (
-    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
-      {editIdx===idx ? (
-        <>
-          <input style={{...inputBase,flex:1,padding:"8px 10px",fontSize:13}}
-            value={editVal} autoFocus
-            onChange={e=>setEditVal(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&onSave()}/>
-          <button onClick={onSave}
-            style={{background:C.success+"22",border:`1px solid ${C.success}55`,borderRadius:8,
-              padding:"8px 12px",cursor:"pointer",color:C.success,fontSize:13,fontWeight:700}}>✅</button>
-          <button onClick={()=>{setEditIdx(null);setEditVal("");}}
-            style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
-              padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12}}>✕</button>
-        </>
-      ) : (
-        <>
-          <div style={{flex:1,padding:"9px 12px",background:C.light,borderRadius:8,
-            fontSize:13,fontWeight:600,color:C.text,textTransform:"capitalize"}}>
-            {label}
-            {sub&&<span style={{fontSize:11,color:C.muted,marginLeft:8,fontWeight:400}}>{sub}</span>}
-          </div>
-          <button onClick={()=>{setEditIdx(idx);setEditVal(label);}}
-            style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,
-              padding:"8px 10px",cursor:"pointer",color:C.muted,fontSize:12}}>✏️</button>
-          <button onClick={onDelete}
-            style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:8,
-              padding:"8px 10px",cursor:"pointer",color:C.danger,fontSize:12}}>🗑️</button>
         </>
       )}
     </div>
   );
-
-  return (
-    <div>
-      <SecTitle icon="⚙️" children="Ajustes"/>
-      <div style={{fontSize:12,color:C.muted,marginBottom:14,textAlign:"center",padding:"0 8px"}}>
-        ✅ Renomear qualquer item atualiza automaticamente todos os itens do estoque.
-      </div>
-
-      {sections.map(s=>(
-        <Card key={s.key} style={{marginBottom:10}}>
-          <button onClick={()=>openSection(s.key)}
-            style={{width:"100%",background:"none",border:"none",cursor:"pointer",
-              display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:18}}>{s.icon}</span>
-              <span style={{fontWeight:700,fontSize:14,color:C.text}}>{s.title}</span>
-              <span style={{fontSize:11,color:C.muted,background:C.light,borderRadius:10,padding:"1px 8px"}}>
-                {(config[s.key]||[]).length}
-              </span>
-            </div>
-            <span style={{color:C.muted}}>{editingSection===s.key?"▲":"▼"}</span>
-          </button>
-
-          {editingSection===s.key&&(
-            <div style={{marginTop:12}}>
-              {[...(config[s.key]||[])].sort((a,b)=>a.localeCompare(b,"pt")).map((item,si)=>{
-                const origIdx=(config[s.key]||[]).indexOf(item);
-                return <ItemRow key={si} label={item} idx={origIdx}
-                  onSave={()=>saveEdit(s.key,s.field)}
-                  onDelete={()=>deleteItem(s.key,origIdx)}/>;
-              })}
-              <div style={{display:"flex",gap:8,marginTop:10}}>
-                <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
-                  placeholder="Novo item..."
-                  value={newItem} onChange={e=>setNewItem(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&addItem(s.key)}/>
-                <button onClick={()=>addItem(s.key)}
-                  style={{background:s.color+"22",border:`1px solid ${s.color}55`,borderRadius:8,
-                    padding:"9px 14px",cursor:"pointer",color:s.color,fontSize:13,fontWeight:700}}>
-                  +
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
-      ))}
-
-      {/* Cortes */}
-      <Card style={{marginBottom:12}}>
-        <button onClick={()=>openSection("cortes")}
-          style={{width:"100%",background:"none",border:"none",cursor:"pointer",
-            display:"flex",justifyContent:"space-between",alignItems:"center",padding:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:18}}>🔪</span>
-            <span style={{fontWeight:700,fontSize:14,color:C.text}}>Cortes do catálogo</span>
-            <span style={{fontSize:11,color:C.muted,background:C.light,borderRadius:10,padding:"1px 8px"}}>
-              {catalog.length}
-            </span>
-          </div>
-          <span style={{color:C.muted}}>{editingSection==="cortes"?"▲":"▼"}</span>
-        </button>
-        {editingSection==="cortes"&&(
-          <div style={{marginTop:12}}>
-            {catalog.length===0&&(
-              <div style={{color:C.muted,textAlign:"center",padding:8}}>Nenhum corte cadastrado ainda.</div>
-            )}
-            {[...catalog].sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map((c,si)=>{
-              const origIdx=catalog.findIndex(x=>x.key===c.key);
-              return <ItemRow key={c.key||si} label={c.nome} sub={c.tipo} idx={origIdx}
-                onSave={()=>saveCorteEdit(origIdx)}
-                onDelete={()=>onUpdateCatalog(catalog.filter((_,j)=>j!==origIdx))}/>;
-            })}
-            {/* Adicionar novo corte — independente de tipo */}
-            <div style={{display:"flex",gap:8,marginTop:10}}>
-              <input style={{...inputBase,flex:1,padding:"9px 12px",fontSize:13}}
-                placeholder="Nome do corte..."
-                value={newCorte} onChange={e=>setNewCorte(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&addCorte()}/>
-              <button onClick={addCorte}
-                style={{background:C.primary+"22",border:`1px solid ${C.primary}55`,borderRadius:8,
-                  padding:"9px 14px",cursor:"pointer",color:C.primary,fontSize:13,fontWeight:700}}>+</button>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Zona de perigo */}
-      <Card style={{border:`1px solid ${C.danger}55`,marginBottom:12}}>
-        <div style={{fontWeight:700,fontSize:14,color:C.danger,marginBottom:10}}>⚠️ Zona de perigo</div>
-        <button onClick={()=>{
-          if(window.confirm("Tem certeza que quer apagar TODO o histórico?\n\nIsso remove saídas, transferências e entradas dos relatórios.\n\nO estoque atual NÃO será afetado."))
-            onClearHistory();
-        }} style={{width:"100%",background:C.danger+"18",border:`1px solid ${C.danger}55`,
-          borderRadius:10,padding:"12px",cursor:"pointer",color:C.danger,
-          fontSize:14,fontWeight:700}}>
-          🗑️ Limpar todos os históricos
-        </button>
-        <div style={{fontSize:11,color:C.muted,marginTop:6,textAlign:"center"}}>
-          Remove saídas e transferências dos relatórios. O estoque atual fica intacto.
-        </div>
-      </Card>
-    </div>
-  );
 }
+
 
 export default function App() {
   const [meats,        setMeats]        = useState([]);
