@@ -488,17 +488,46 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         </table>`;
                       }).join("");
                       const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Estoque</title>
-                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}
-                        .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                        @media print{body{padding:0}.close-btn{display:none}}</style>
+                        <style>
+                          body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
+                          h1{margin:0;font-size:22px;color:#1565c0}
+                          h3{margin:20px 0 6px;font-size:14px;color:#333}
+                          table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
+                          th{text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px}
+                          td{padding:5px 8px;border-bottom:1px solid #eee}
+                          tfoot td{font-weight:700;background:#f9f9f9;border-top:1px solid #ccc}
+                          .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                          @media print{body{padding:0}.close-btn{display:none}}
+                        </style>
                       </head><body>
                         <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
-                          <h1 style="margin:0;color:#1565c0;font-size:20px">📦 Estoque Atual</h1>
+                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
+                          <h1>📦 Estoque Atual</h1>
                           <span style="font-size:12px;color:#666">${now}</span>
                         </div>
-                        <p style="margin:0 0 12px;font-size:13px;color:#555">Total: <strong>${fmtKg(total)}</strong></p>
-                        ${body}
+                        <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${fmtKg(total)}</strong></p>
+                        ${locais.map(local=>{
+                          const items=filtered.filter(m=>m.local===local);
+                          const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
+                          return `<h3>📍 ${local}</h3>
+                          <table>
+                            <thead><tr>
+                              <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                            </tr></thead>
+                            <tbody>${items.map(m=>`<tr>
+                              <td>${m.corte||m.tipo}</td>
+                              <td style="text-transform:capitalize">${m.tipo}</td>
+                              <td>${m.origem||"—"}</td>
+                              <td style="text-transform:capitalize">${m.utilidade||"—"}</td>
+                              <td>${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
+                              <td style="text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
+                            </tr>`).join("")}</tbody>
+                            <tfoot><tr>
+                              <td colspan="5">Total ${local}</td>
+                              <td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
+                            </tr></tfoot>
+                          </table>`;
+                        }).join("")}
                         <script>window.onload=()=>window.print()<\/script>
                       </body></html>`;
                       const w=window.open("","_blank");
@@ -550,27 +579,31 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             <td style="padding:5px 8px;text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
                           </tr>`).join("");
                           const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
-                            <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto}
-                            .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                            @media print{body{padding:0}.close-btn{display:none}}</style>
+                            <style>
+                              body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
+                              h1{margin:0;font-size:22px;color:#e65c00}
+                              table{width:100%;border-collapse:collapse;font-size:13px}
+                              th{text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px}
+                              td{padding:5px 8px;border-bottom:1px solid #eee}
+                              tfoot td{font-weight:700;background:#fff8f0;border-top:1px solid #ccc}
+                              .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                              @media print{body{padding:0}.close-btn{display:none}}
+                            </style>
                           </head><body>
                             <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                            <div style="display:flex;justify-content:space-between;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
-                              <h1 style="margin:0;color:#e65c00;font-size:20px">🔥 Preparar Churrasco</h1>
+                            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
+                              <h1>🔥 Preparar Churrasco</h1>
                               <span style="font-size:12px;color:#666">${now}</span>
                             </div>
-                            <table style="width:100%;border-collapse:collapse;font-size:13px">
-                              <thead><tr style="background:#fff3e0">
-                                <th style="text-align:left;padding:5px 8px">Corte</th>
-                                <th style="text-align:left;padding:5px 8px">Tipo</th>
-                                <th style="text-align:left;padding:5px 8px">Local</th>
-                                <th style="text-align:left;padding:5px 8px">Pacotes</th>
-                                <th style="text-align:right;padding:5px 8px">Peso</th>
+                            <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
+                            <table>
+                              <thead><tr>
+                                <th>Corte</th><th>Tipo</th><th>Local</th><th>Pacotes</th><th style="text-align:right">Peso</th>
                               </tr></thead>
                               <tbody>${rows}</tbody>
-                              <tfoot><tr style="font-weight:700;background:#fff3e0">
-                                <td colspan="4" style="padding:5px 8px">Total</td>
-                                <td style="padding:5px 8px;text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td>
+                              <tfoot><tr>
+                                <td colspan="4">Total</td>
+                                <td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td>
                               </tr></tfoot>
                             </table>
                             <script>window.onload=()=>window.print()<\/script>
@@ -608,17 +641,27 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         <td style="padding:6px 8px;text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
                       </tr>`).join("");
                       const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
-                        <style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto}
-                        .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
-                        @media print{body{padding:0}.close-btn{display:none}}</style>
+                        <style>
+                          body{font-family:Arial,sans-serif;padding:24px;max-width:700px;margin:0 auto;color:#222}
+                          h1{margin:0;font-size:22px;color:#2e7d32}
+                          table{width:100%;border-collapse:collapse;font-size:14px}
+                          th{text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px}
+                          td{padding:7px 8px;border-bottom:1px solid #eee;font-size:14px}
+                          .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
+                          @media print{body{padding:0}.close-btn{display:none}}
+                        </style>
                       </head><body>
                         <button class="close-btn" onclick="window.close()">✕ Fechar</button>
-                        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:12px">
-                          <h1 style="margin:0;color:#2e7d32;font-size:20px">🛒 Lista de Compras</h1>
+                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
+                          <h1>🛒 Lista de Compras</h1>
                           <span style="font-size:12px;color:#666">${now}</span>
                         </div>
-                        <table style="width:100%;border-collapse:collapse;font-size:14px">
-                          <tbody>${rows}</tbody>
+                        <table>
+                          <thead><tr><th>Item</th><th>Tipo</th></tr></thead>
+                          <tbody>${(shoppingList||[]).map(i=>`<tr>
+                            <td>☐ ${i.nome}</td>
+                            <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
+                          </tr>`).join("")}</tbody>
                         </table>
                         <script>window.onload=()=>window.print()<\/script>
                       </body></html>`;
