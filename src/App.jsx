@@ -336,6 +336,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
   const [pfLocal,  setPfLocal]  = useState("todos");
   const [pfTipo,   setPfTipo]   = useState("todos");
   const [pfOrigem, setPfOrigem] = useState("todos");
+  const [pfUtil,   setPfUtil]   = useState("todos");
 
   return (
     <div>
@@ -406,6 +407,18 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                     </button>
                   ))}
                 </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:C.muted,fontWeight:700,alignSelf:"center"}}>UTILIDADE</span>
+                  {["todos",...(appConfig?.utilidades||["churrasco","consumo"]).filter(u=>meats.some(m=>m.utilidade===u))].map(u=>(
+                    <button key={u} onClick={()=>setPfUtil(u)}
+                      style={{fontSize:11,padding:"3px 10px",borderRadius:10,cursor:"pointer",fontWeight:600,
+                        background:pfUtil===u?C.info+"22":C.light,
+                        border:`1px solid ${pfUtil===u?C.info:C.border}`,
+                        color:pfUtil===u?C.info:C.muted}}>
+                      {u==="todos"?"Todas":u}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Lista filtrada */}
@@ -413,7 +426,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 const filtered=meats
                   .filter(m=>pfLocal==="todos"||m.local===pfLocal)
                   .filter(m=>pfTipo==="todos"||m.tipo===pfTipo)
-                  .filter(m=>pfOrigem==="todos"||m.origem===pfOrigem);
+                  .filter(m=>pfOrigem==="todos"||m.origem===pfOrigem)
+                  .filter(m=>pfUtil==="todos"||m.utilidade===pfUtil);
                 const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
                 return (
                   <>
