@@ -572,11 +572,11 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         <button onClick={()=>{
                           const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                           const rows=Object.values(grupos).map(g=>`<tr>
-                            <td style="padding:5px 8px">${g.corte}</td>
-                            <td style="padding:5px 8px;text-transform:capitalize">${g.tipo}</td>
-                            <td style="padding:5px 8px">${g.local}</td>
-                            <td style="padding:5px 8px">${g.n} pct</td>
-                            <td style="padding:5px 8px;text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+                            <td style="font-weight:600">${g.corte}</td>
+                            <td style="text-transform:capitalize">${g.tipo}</td>
+                            <td>${g.local}</td>
+                            <td>${g.n} pct</td>
+                            <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
                           </tr>`).join("");
                           const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
                             <style>
@@ -637,8 +637,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                     <button onClick={()=>{
                       const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                       const rows=(shoppingList||[]).map(i=>`<tr>
-                        <td style="padding:6px 8px;font-size:14px">☐ ${i.nome}</td>
-                        <td style="padding:6px 8px;text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
+                        <td style="font-weight:600">☐  ${i.nome}</td>
+                        <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
                       </tr>`).join("");
                       const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
                         <style>
@@ -658,10 +658,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         </div>
                         <table>
                           <thead><tr><th>Item</th><th>Tipo</th></tr></thead>
-                          <tbody>${(shoppingList||[]).map(i=>`<tr>
-                            <td>☐ ${i.nome}</td>
-                            <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
-                          </tr>`).join("")}</tbody>
+                          <tbody>${rows}</tbody>
                         </table>
                         <script>window.onload=()=>window.print()<\/script>
                       </body></html>`;
