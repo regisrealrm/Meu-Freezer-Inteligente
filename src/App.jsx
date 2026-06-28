@@ -2429,7 +2429,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig, pre
             </div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
               <Btn onClick={submit}>✅ Cadastrar item</Btn>
-              <Btn onClick={()=>setTab("estoque")} color={C.dim}>← Voltar</Btn>
+              <Btn onClick={()=>{setForm(blank);setAddMode(null);setPesosInd([""]);onClearPrefill?.();setTab("dashboard");}} color={C.danger}>✕ Cancelar</Btn>
             </div>
           </>
         )}
@@ -2664,7 +2664,7 @@ function Saida({meats,onRegister,setTab}) {
           <Btn onClick={submit} color={isTransfer?C.info:C.danger}>
             {isTransfer?"🔄 Confirmar transferência":"✅ Confirmar saída"}
           </Btn>
-          <Btn onClick={()=>setTab("estoque")} color={C.dim}>← Voltar</Btn>
+          <Btn onClick={()=>{setForm(blank);setAddMode(null);setPesosInd([""]);onClearPrefill?.();setTab("dashboard");}} color={C.danger}>✕ Cancelar</Btn>
         </div>
       </Card>
     </div>
