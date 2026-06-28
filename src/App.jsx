@@ -198,7 +198,7 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList,onAddToShoppingList,meatsCatalog}) {
+function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,pacotesRefeicao,totalRefeicaoKg,onConfirmRefeicao,onCancelRefeicao,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList,onAddToShoppingList,meatsCatalog}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
@@ -350,6 +350,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
   const [pendingItems,        setPendingItems]        = useState([]);
   const [showShoppingItems,   setShowShoppingItems]   = useState(false);
   const [showChurrascoItems,  setShowChurrascoItems]  = useState(false);
+  const [showRefeicaoItems,   setShowRefeicaoItems]   = useState(false);
   const [showPfFilters,   setShowPfFilters]   = useState(false);
   const [pfLocais,  setPfLocais]  = useState([]);
   const [pfTipos,   setPfTipos]   = useState([]);
@@ -1012,6 +1013,73 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 </button>
                 <button onClick={onConfirmChurrasco}
                   style={{flex:2,background:C.primary,border:"none",
+                    borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
+                  ✅ Confirmar saída
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Card Preparar Refeição — colapsável ──────────── */}
+      {pacotesRefeicao?.length>0&&(
+        <div style={{background:C.card,border:`2px solid ${C.success}`,borderRadius:14,
+          marginBottom:14,overflow:"hidden"}}>
+          <div onClick={()=>setShowRefeicaoItems(s=>!s)}
+            style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+              padding:"14px 16px",cursor:"pointer"}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:16,color:C.success}}>🍽️ Preparar Refeição</div>
+              <div style={{fontSize:12,color:C.muted,marginTop:2}}>
+                {pacotesRefeicao.length} pacote{pacotesRefeicao.length!==1?"s":""} · {fmtKg(totalRefeicaoKg)}
+              </div>
+            </div>
+            <span style={{color:C.muted,fontSize:14}}>{showRefeicaoItems?"▲":"▼"}</span>
+          </div>
+          {showRefeicaoItems&&(
+            <div style={{padding:"0 16px 14px"}}>
+              {(()=>{
+                const grupos={};
+                pacotesRefeicao.forEach(p=>{
+                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,pacotes:[]};
+                  grupos[p.corte].kg+=p.pesoAtual;
+                  grupos[p.corte].pacotes.push(p);
+                });
+                return Object.values(grupos).map(g=>(
+                  <div key={g.corte} style={{background:C.success+"18",borderRadius:10,
+                    padding:"10px 12px",marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div>
+                        <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
+                        <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>
+                          {g.tipo} · {g.local}
+                        </span>
+                      </div>
+                      <span style={{fontWeight:800,fontSize:15,color:C.success}}>{fmtKg(g.kg)}</span>
+                    </div>
+                    {g.pacotes.map((p,i)=>(
+                      <div key={p.id} style={{display:"flex",justifyContent:"space-between",
+                        alignItems:"center",padding:"5px 4px",borderTop:`1px solid ${C.border}44`}}>
+                        <span style={{fontSize:12,color:C.muted}}>Pacote {i+1} · {fmtKg(p.pesoAtual)}</span>
+                        <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
+                          style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
+                            padding:"3px 8px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:600}}>
+                          ✕ Não retirar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ));
+              })()}
+              <div style={{display:"flex",gap:10,marginTop:10}}>
+                <button onClick={onCancelRefeicao}
+                  style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
+                    borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
+                  ❌ Cancelar tudo
+                </button>
+                <button onClick={onConfirmRefeicao}
+                  style={{flex:2,background:C.success,border:"none",
                     borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
                   ✅ Confirmar saída
                 </button>
@@ -1688,7 +1756,9 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                             opacity:p.status==="consumido"?0.4:1}}>
                             <span style={{fontSize:13,fontWeight:600,color:C.text}}>
                               Pacote {i+1}
-                              {p.churrasco&&<span style={{fontSize:11,color:C.primary}}> · 🔥 churrasco</span>}
+                              {p.churrasco&&<span style={{fontSize:11,color:detail.utilidade==="consumo"?C.success:C.primary}}>
+                                {detail.utilidade==="consumo"?" · 🍽️ refeição":" · 🔥 churrasco"}
+                              </span>}
                               {p.status==="aberto"&&<span style={{color:C.warning,fontSize:11}}> · 🔓 aberto</span>}
                               {p.status==="consumido"&&<span style={{color:C.dim,fontSize:11}}> · consumido</span>}
                             </span>
@@ -1712,10 +1782,13 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                               )}
                               {p.status!=="consumido"&&!editingPacotes&&(
                                 <button onClick={()=>onTogglePacoteChurrasco(detail.id,p.id)}
-                                  style={{background:p.churrasco?C.primary+"33":C.bg,
-                                    border:`1px solid ${p.churrasco?C.primary:C.border}`,
+                                  title={detail.utilidade==="consumo"?"Marcar para refeição":"Marcar para churrasco"}
+                                  style={{background:p.churrasco
+                                    ?(detail.utilidade==="consumo"?C.success:C.primary)+"33":C.bg,
+                                    border:`1px solid ${p.churrasco
+                                      ?(detail.utilidade==="consumo"?C.success:C.primary):C.border}`,
                                     borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:14}}>
-                                  🔥
+                                  {detail.utilidade==="consumo"?"🍽️":"🔥"}
                                 </button>
                               )}
                             </div>
@@ -3450,54 +3523,66 @@ export default function App() {
     }));
   };
 
-  const cancelChurrasco = () => {
-    setMeats(prev=>prev.map(m=>({
-      ...m,
-      pacotes:(m.pacotes||[]).map(p=>({...p,churrasco:false}))
-    })));
+  // ── Cancela só os pacotes de um grupo (churrasco ou refeição) ──────────────
+  const cancelGrupo = (utilidade) => {
+    setMeats(prev=>prev.map(m=>{
+      if(utilidade==="consumo" ? m.utilidade!=="consumo" : m.utilidade==="consumo") return m;
+      return {...m, pacotes:(m.pacotes||[]).map(p=>({...p,churrasco:false}))};
+    }));
   };
+  const cancelChurrasco = () => cancelGrupo("churrasco");
+  const cancelRefeicao  = () => cancelGrupo("consumo");
 
-  const confirmChurrasco = () => {
-    const churrascoMeats = meats.filter(m=>(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido"));
+  // ── Confirma saída de um grupo ─────────────────────────────────────────────
+  const confirmGrupo = (utilidade) => {
+    const motivo = utilidade==="consumo" ? "consumo" : "churrasco";
+    const grupoMeats = meats.filter(m=>
+      m.utilidade===utilidade &&
+      (m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido")
+    );
     const newMeats = meats.map(m=>{
+      if(m.utilidade!==utilidade) return m;
       if(!(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido")) return m;
-      const updatedPacs = (m.pacotes||[]).map(p=>{
+      const updatedPacs=(m.pacotes||[]).map(p=>{
         if(!p.churrasco||p.status==="consumido") return {...p,churrasco:false};
         return {...p,pesoAtual:0,status:"consumido",churrasco:false};
       });
-      const novoTotal = Math.round(updatedPacs.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+      const novoTotal=Math.round(updatedPacs.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
       return {...m,pacotes:updatedPacs,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"};
     });
     setMeats(newMeats);
-    churrascoMeats.forEach(m=>{
+    grupoMeats.forEach(m=>{
       const cPacs=(m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido");
       const totalRet=Math.round(cPacs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
       setExits(prev=>[...prev,{
-        id:uid(), tipo:m.tipo, corte:m.corte, local:m.local,
-        carneNome:m.corte||m.tipo, pesoRetirado:totalRet,
-        dataSaida:TODAY, motivo:"churrasco", feitorPor:currentUser
+        id:uid(),tipo:m.tipo,corte:m.corte,local:m.local,
+        carneNome:m.corte||m.tipo,pesoRetirado:totalRet,
+        dataSaida:TODAY,motivo,feitorPor:currentUser
       }]);
     });
-    // Detecta itens que ficaram sem estoque e oferece lista de compras
-    const esgotados = newMeats.filter(m=>
-      churrascoMeats.some(c=>c.id===m.id) && m.pesoTotal<=0
+    const esgotados=newMeats.filter(m=>
+      grupoMeats.some(c=>c.id===m.id)&&m.pesoTotal<=0
     );
     if(esgotados.length>0){
-      const nomes = esgotados.map(m=>m.corte||m.tipo).join(", ");
+      const nomes=esgotados.map(m=>m.corte||m.tipo).join(", ");
       if(window.confirm(`Acabou o estoque de: ${nomes}.\n\nAdicionar à lista de compras?`)){
-        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo, m.tipo, m.origem||"", m.utilidade||"", m.precoKg||null));
+        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo,m.tipo,m.origem||"",m.utilidade||"",m.precoKg||null));
       }
     }
   };
+  const confirmChurrasco = () => confirmGrupo("churrasco");
+  const confirmRefeicao  = () => confirmGrupo("consumo");
 
-  // Pacotes marcados para churrasco
-  const pacotesChurrasco = meats.flatMap(m=>
+  // ── Pacotes marcados — separados por utilidade ─────────────────────────────
+  const allMarcados = meats.flatMap(m=>
     (m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido")
       .map(p=>({...p,meatId:m.id,corte:m.corte||m.tipo,tipo:m.tipo,
-        local:m.local,origem:m.origem||"—",utilidade:m.utilidade||"—",
-        precoKg:m.precoKg||null}))
+        local:m.local,origem:m.origem||"—",utilidade:m.utilidade||"—",precoKg:m.precoKg||null}))
   );
+  const pacotesChurrasco = allMarcados.filter(p=>p.utilidade!=="consumo");
+  const pacotesRefeicao  = allMarcados.filter(p=>p.utilidade==="consumo");
   const totalChurrascoKg = Math.round(pacotesChurrasco.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+  const totalRefeicaoKg  = Math.round(pacotesRefeicao.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
 
   // Renomeia campo em TODOS os itens do estoque de uma vez (Ajustes)
   const renameMeatField = (field, oldVal, newVal) => {
@@ -3706,7 +3791,7 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
