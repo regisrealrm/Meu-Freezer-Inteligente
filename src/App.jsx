@@ -198,7 +198,7 @@ const StatCard = ({icon,label,value,color=C.primary}) => (
 const GRID2 = {display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(190px, 1fr))",gap:8};
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,pacotesRefeicao,totalRefeicaoKg,onConfirmRefeicao,onCancelRefeicao,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList,onAddToShoppingList,meatsCatalog}) {
+function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrascoKg,onConfirmChurrasco,onCancelChurrasco,pacotesRefeicao,totalRefeicaoKg,onConfirmRefeicao,onCancelRefeicao,onTogglePacoteChurrasco,shoppingList,onRemoveFromShoppingList,onCompreiItem,onAddToShoppingList,meatsCatalog}) {
   const [open,      setOpen]      = useState(null);
   const [localFlt,  setLocalFlt]  = useState("todos");
   const [openUtil,  setOpenUtil]  = useState(null);
@@ -835,7 +835,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             : "⚠️ Sem estoque"}
                         </div>
                       </div>
-                      <button onClick={()=>onRemoveFromShoppingList(item.id)}
+                      <button onClick={()=>onCompreiItem(item)}
                         style={{background:C.success+"22",border:`1px solid ${C.success}55`,
                           borderRadius:8,padding:"5px 12px",cursor:"pointer",
                           color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap",marginLeft:8}}>
@@ -2116,14 +2116,27 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
 }
 
 // ─── ENTRADA ──────────────────────────────────────────────────────────────────
-function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
+function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig, prefill, onClearPrefill}) {
   const cfgTipos  = [...(appConfig?.tipos      || TIPOS)].sort((a,b)=>a.localeCompare(b,"pt"));
   const cfgLocais = [...(appConfig?.locais     || LOCAIS)].sort((a,b)=>a.localeCompare(b,"pt"));
   const cfgOrigens= [...(appConfig?.origens    || ORIGENS)].sort((a,b)=>a.localeCompare(b,"pt"));
   const cfgUtils  = [...(appConfig?.utilidades || ["churrasco","consumo"])].sort((a,b)=>a.localeCompare(b,"pt"));
-  const blank = {tipo:cfgTipos[0]||"bovina",corte:"",origem:"",utilidade:"",pesoTotal:"",quantidadePecas:"1",
-    dataEntrada:TODAY,local:cfgLocais[0]||"Freezer 1",status:"disponível",observacao:"",precoPago:"",precoKg:""};
-  const [form,     setForm]    = useState(blank);
+
+  const blank = {
+    tipo:cfgTipos[0]||"",corte:"",origem:"",utilidade:"",pesoTotal:"",
+    quantidadePecas:"1",dataEntrada:TODAY,local:cfgLocais[0]||"",
+    status:"disponível",observacao:"",precoPago:"",precoKg:""
+  };
+
+  // Pré-preenche com dados da lista de compras se houver
+  const initialForm = prefill ? {
+    ...blank,
+    tipo:      prefill.tipo      || blank.tipo,
+    corte:     prefill.corte     || "",
+    origem:    prefill.origem    || "",
+    utilidade: prefill.utilidade || "",
+  } : blank;
+  const [form,     setForm]    = useState(initialForm);
   const [ok,       setOk]      = useState(false);
   const [addMode,  setAddMode] = useState(null);
   const [addForm,  setAddForm] = useState({pesoAdd:"",qtdAdd:"1",precoAdd:""});
@@ -2204,6 +2217,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
     if(exactMatch) {
       onAddToExisting(exactMatch.id, totalPeso, qtd, parseFloat(form.precoPago)||null, pacotesPesos);
       setForm(blank); setAddMode(null); setPesosInd([""]);
+      onClearPrefill?.();
       setOk(true); setTimeout(()=>setOk(false),3000);
       return;
     }
@@ -2216,6 +2230,7 @@ function Entrada({onAdd, onAddToExisting, catalog, meats, setTab, appConfig}) {
       precoKg:         parseFloat(form.precoKg)||null,
     });
     setForm(blank); setAddMode(null); setPesosInd([""]);
+    onClearPrefill?.();
     setOk(true); setTimeout(()=>setOk(false),3000);
   };
 
@@ -3308,7 +3323,8 @@ export default function App() {
     origens:    [...ORIGENS],
     utilidades: ["churrasco","consumo"],
   });
-  const [tab,         setTab]         = useState("dashboard");
+  const [tab,          setTab]         = useState("dashboard");
+  const [entradaPrefill, setEntradaPrefill] = useState(null);
   const [loaded,      setLoaded]      = useState(false);
   const [saveStatus,  setSaveStatus]  = useState("idle");
   const [storageOk,   setStorageOk]   = useState(null);
@@ -3524,6 +3540,18 @@ export default function App() {
     });
   };
   const removeFromShoppingList = (id) => setShoppingList(p=>p.filter(i=>i.id!==id));
+
+  // Comprei: remove da lista e abre Entrada pré-preenchida
+  const onCompreiItem = (item) => {
+    removeFromShoppingList(item.id);
+    setEntradaPrefill({
+      tipo:      item.tipo      || "",
+      corte:     item.nome      || "",
+      origem:    item.origem    || "",
+      utilidade: item.utilidade || "",
+    });
+    setTab("entrada");
+  };
 
   // Catálogo de itens já conhecidos (ativo + consumido) para a lista de compras
   const meatsCatalog = (()=>{
@@ -3826,9 +3854,9 @@ export default function App() {
 
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
-        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
+        {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onCompreiItem={onCompreiItem} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
-        {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig}/>}
+        {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig} prefill={entradaPrefill} onClearPrefill={()=>setEntradaPrefill(null)}/>}
         {tab==="churras"    &&<Churrasometro meats={active} catalog={catalog} appConfig={appConfig}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
         {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>withPassword(()=>{setExits([]);setMeats(p=>p.filter(m=>m.pesoTotal>0));})}/>}
