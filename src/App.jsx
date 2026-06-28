@@ -807,12 +807,15 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   Lista vazia — toque em ＋ para adicionar
                 </div>
               : shoppingList.map(item=>{
-                  // Busca estoque atual desse item
+                  // Busca por combinação exata: tipo + corte + origem + utilidade
                   const stockMeats = meats.filter(m=>
-                    (m.corte||m.tipo).toLowerCase()===item.nome.toLowerCase()
+                    (m.corte||m.tipo).toLowerCase()===item.nome.toLowerCase() &&
+                    (m.tipo||"")      === (item.tipo||"") &&
+                    (m.origem||"")    === (item.origem||"") &&
+                    (m.utilidade||"") === (item.utilidade||"")
                   );
-                  const totalPacotes = stockMeats.reduce((s,m)=>(m.pacotes||[]).filter(p=>p.status!=="consumido").length+s, 0);
-                  const totalPeso    = stockMeats.reduce((s,m)=>s+m.pesoTotal, 0);
+                  const totalPacotes = stockMeats.reduce((s,m)=>s+(m.pacotes||[]).filter(p=>p.status!=="consumido").length,0);
+                  const totalPeso    = stockMeats.reduce((s,m)=>s+m.pesoTotal,0);
                   const temEstoque   = totalPeso > 0;
                   return (
                     <div key={item.id} style={{display:"flex",justifyContent:"space-between",
@@ -880,6 +883,15 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       s=>s.nome===item.corte&&s.tipo===item.tipo
                     );
                     const selecionado=pendingItems.some(p=>p.key===key);
+                    // Estoque por combinação exata
+                    const stockMeats=(meats||[]).filter(m=>
+                      (m.corte||m.tipo).toLowerCase()===item.corte.toLowerCase()&&
+                      (m.tipo||"")===(item.tipo||"")&&
+                      (m.origem||"")===(item.origem||"")&&
+                      (m.utilidade||"")===(item.utilidade||"")
+                    );
+                    const pcts=stockMeats.reduce((s,m)=>s+(m.pacotes||[]).filter(p=>p.status!=="consumido").length,0);
+                    const peso=stockMeats.reduce((s,m)=>s+m.pesoTotal,0);
                     return (
                       <button key={key} onClick={()=>{
                         if(jaAdicionado) return;
@@ -900,12 +912,18 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                           <div style={{fontSize:11,color:C.muted,marginTop:2,textTransform:"capitalize"}}>
                             {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
                           </div>
+                          <div style={{fontSize:11,marginTop:3,fontWeight:600,
+                            color:peso>0?C.success:C.muted}}>
+                            {peso>0
+                              ? `📦 ${pcts} pacote${pcts!==1?"s":""} · ${fmtKg(peso)}`
+                              : "Sem estoque"}
+                          </div>
                         </div>
                         {jaAdicionado
-                          ? <span style={{fontSize:11,color:C.muted,fontWeight:600}}>Já na lista</span>
+                          ? <span style={{fontSize:11,color:C.muted,fontWeight:600,flexShrink:0}}>Já na lista</span>
                           : selecionado
-                          ? <span style={{fontSize:20,color:C.success}}>✓</span>
-                          : <span style={{fontSize:20,color:C.muted}}>○</span>
+                          ? <span style={{fontSize:20,color:C.success,flexShrink:0}}>✓</span>
+                          : <span style={{fontSize:20,color:C.muted,flexShrink:0}}>○</span>
                         }
                       </button>
                     );
