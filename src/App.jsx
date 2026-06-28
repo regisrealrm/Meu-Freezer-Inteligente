@@ -3001,25 +3001,25 @@ function Relatorios({meats,exits}) {
           <Card style={{marginBottom:14}}>
             <div style={{fontWeight:700,marginBottom:10}}>🔄 Histórico de transferências ({transfers.length})</div>
             {transfers.length===0
-              ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma transferência no período.</div>
-              :transfers.map(e=>(
+              ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma transferência no período.</div>
+              : transfers.map(e=>(
                 <div key={e.id} style={{display:"flex",justifyContent:"space-between",
-                  alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
-                  <div>
-                    <span style={{fontWeight:700}}>{e.corte||e.carneNome}</span>
-                    {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
-                      padding:"1px 6px",borderRadius:4,marginLeft:6}}>{e.tipo}</span>}
-                    <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)}</span>
-                    {e.observacao&&<span style={{fontSize:12,color:C.info}}> · {e.observacao}</span>}
-                    {e.feitorPor&&(
-                      <span style={{fontSize:11,background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
+                  alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{e.corte||e.carneNome}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4,alignItems:"center"}}>
+                      {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
+                        padding:"2px 7px",borderRadius:6,textTransform:"capitalize"}}>{e.tipo}</span>}
+                      <span style={{fontSize:11,color:C.muted}}>📅 {fmtDate(e.dataSaida)}</span>
+                      {e.observacao&&<span style={{fontSize:11,color:C.info,background:C.info+"18",
+                        padding:"2px 7px",borderRadius:6}}>{e.observacao}</span>}
+                      {e.feitorPor&&<span style={{fontSize:11,fontWeight:600,
+                        background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
                         color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
-                        padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
-                        {e.feitorPor}
-                      </span>
-                    )}
+                        padding:"2px 7px",borderRadius:10}}>{e.feitorPor}</span>}
+                    </div>
                   </div>
-                  <span style={{fontSize:11,color:C.muted}}>{fmtKg(e.pesoRetirado)}</span>
+                  <span style={{fontWeight:800,fontSize:14,color:C.muted,flexShrink:0}}>{fmtKg(e.pesoRetirado)}</span>
                 </div>
               ))
             }
@@ -3029,31 +3029,32 @@ function Relatorios({meats,exits}) {
           <Card style={{marginBottom:14}}>
             <div style={{fontWeight:700,marginBottom:10}}>📥 Histórico de entradas ({meatsRange.length})</div>
             {meatsRange.length===0
-              ?<div style={{color:C.muted,textAlign:"center"}}>Nenhuma entrada no período.</div>
-              :[...meatsRange].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                  padding:"7px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
-                  <div>
-                    <span style={{fontWeight:600}}>{m.corte||m.tipo}</span>
-                    <span style={{fontSize:11,color:C.muted,background:C.light,
-                      padding:"1px 6px",borderRadius:4,marginLeft:6}}>{m.tipo}</span>
-                    <span style={{fontSize:12,color:C.muted}}> · {fmtDate(m.dataEntrada)} · {m.local}</span>
-                    {m.precoPago&&<span style={{fontSize:12,color:C.muted}}> · {fmtR(m.precoPago)}</span>}
-                    {m.feitorPor&&(
-                      <span style={{fontSize:11,background:`hsl(${USERS.indexOf(m.feitorPor)*90},60%,20%)`,
+              ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma entrada no período.</div>
+              : [...meatsRange].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(m=>(
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{m.corte||m.tipo}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4,alignItems:"center"}}>
+                      <span style={{fontSize:11,color:C.muted,background:C.light,
+                        padding:"2px 7px",borderRadius:6,textTransform:"capitalize"}}>{m.tipo}</span>
+                      <span style={{fontSize:11,color:C.muted}}>📅 {fmtDate(m.dataEntrada)}</span>
+                      <span style={{fontSize:11,color:C.muted}}>📍 {m.local}</span>
+                      {m.precoPago&&<span style={{fontSize:11,color:C.success,background:C.success+"18",
+                        padding:"2px 7px",borderRadius:6}}>{fmtR(m.precoPago)}</span>}
+                      {m.feitorPor&&<span style={{fontSize:11,fontWeight:600,
+                        background:`hsl(${USERS.indexOf(m.feitorPor)*90},60%,20%)`,
                         color:`hsl(${USERS.indexOf(m.feitorPor)*90},70%,65%)`,
-                        padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
-                        {m.feitorPor}
-                      </span>
-                    )}
+                        padding:"2px 7px",borderRadius:10}}>{m.feitorPor}</span>}
+                    </div>
                   </div>
-                  <strong style={{color:C.success}}>+{fmtKg(m.pesoInicial||m.pesoTotal)}</strong>
+                  <strong style={{fontSize:15,color:C.success,flexShrink:0}}>+{fmtKg(m.pesoInicial||m.pesoTotal)}</strong>
                 </div>
               ))
             }
           </Card>
 
-          {/* Histórico de saídas — agrupado por freezer se > 1 local */}
+          {/* Histórico de saídas */}
           <Card>
             <div style={{fontWeight:700,marginBottom:10}}>📋 Histórico de saídas ({saidas.length})</div>
             {saidas.length===0
@@ -3072,46 +3073,49 @@ function Relatorios({meats,exits}) {
                           <span>📍 {local}</span>
                           <span style={{color:C.danger}}>−{fmtKg(totalLocal)}</span>
                         </div>
-                        {items.map(e=>(
-                          <div key={e.id} style={{display:"flex",justifyContent:"space-between",
-                            alignItems:"center",padding:"6px 8px",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
-                            <div>
-                              <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
-                              <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
-                              <span style={{fontSize:12,fontWeight:600,color:
-                                e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:C.success}}>
-                                {e.motivo}
-                              </span>
+                        {items.map(e=>{
+                          const motivoColor=e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:e.motivo==="consumo"?C.success:C.info;
+                          return (
+                            <div key={e.id} style={{display:"flex",justifyContent:"space-between",
+                              alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontWeight:700,fontSize:14,color:C.text}}>{e.corte||e.carneNome||e.tipo}</div>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4,alignItems:"center"}}>
+                                  <span style={{fontSize:11,color:motivoColor,background:motivoColor+"18",
+                                    padding:"2px 7px",borderRadius:6,fontWeight:600}}>{e.motivo}</span>
+                                  <span style={{fontSize:11,color:C.muted}}>📅 {fmtDate(e.dataSaida)}</span>
+                                </div>
+                              </div>
+                              <strong style={{fontSize:15,color:C.danger,flexShrink:0}}>−{fmtKg(e.pesoRetirado)}</strong>
                             </div>
-                            <strong style={{color:C.danger}}>−{fmtKg(e.pesoRetirado)}</strong>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     );
                   })}
-                  {locaisComSaida.length<=1&&[...saidas].reverse().map(e=>(
-                    <div key={e.id} style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,flexWrap:"wrap",gap:4}}>
-                      <div>
-                        <span style={{fontWeight:700}}>{e.corte||e.carneNome||e.tipo}</span>
-                        {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
-                          padding:"1px 6px",borderRadius:4,marginLeft:6}}>{e.tipo}</span>}
-                        <span style={{fontSize:12,color:C.muted}}> · {fmtDate(e.dataSaida)} · </span>
-                        <span style={{fontSize:12,fontWeight:600,color:
-                          e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:C.success}}>
-                          {e.motivo}
-                        </span>
-                        {e.feitorPor&&(
-                          <span style={{fontSize:11,background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
-                            color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
-                            padding:"1px 7px",borderRadius:10,marginLeft:6,fontWeight:600}}>
-                            {e.feitorPor}
-                          </span>
-                        )}
+                  {locaisComSaida.length<=1&&[...saidas].reverse().map(e=>{
+                    const motivoColor=e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:e.motivo==="consumo"?C.success:C.info;
+                    return (
+                      <div key={e.id} style={{display:"flex",justifyContent:"space-between",
+                        alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text}}>{e.corte||e.carneNome||e.tipo}</div>
+                          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4,alignItems:"center"}}>
+                            {e.tipo&&<span style={{fontSize:11,color:C.muted,background:C.light,
+                              padding:"2px 7px",borderRadius:6,textTransform:"capitalize"}}>{e.tipo}</span>}
+                            <span style={{fontSize:11,color:motivoColor,background:motivoColor+"18",
+                              padding:"2px 7px",borderRadius:6,fontWeight:600}}>{e.motivo}</span>
+                            <span style={{fontSize:11,color:C.muted}}>📅 {fmtDate(e.dataSaida)}</span>
+                            {e.feitorPor&&<span style={{fontSize:11,fontWeight:600,
+                              background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
+                              color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
+                              padding:"2px 7px",borderRadius:10}}>{e.feitorPor}</span>}
+                          </div>
+                        </div>
+                        <strong style={{fontSize:15,color:C.danger,flexShrink:0}}>−{fmtKg(e.pesoRetirado)}</strong>
                       </div>
-                      <strong style={{color:C.danger}}>−{fmtKg(e.pesoRetirado)}</strong>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )
             }
