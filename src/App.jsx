@@ -351,6 +351,8 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
   const [showShoppingItems,   setShowShoppingItems]   = useState(false);
   const [showChurrascoItems,  setShowChurrascoItems]  = useState(false);
   const [showRefeicaoItems,   setShowRefeicaoItems]   = useState(false);
+  const [churrascoAjustes,    setChurrascoAjustes]    = useState({});
+  const [refeicaoAjustes,     setRefeicaoAjustes]     = useState({});
   const [showPfFilters,   setShowPfFilters]   = useState(false);
   const [pfLocais,  setPfLocais]  = useState([]);
   const [pfTipos,   setPfTipos]   = useState([]);
@@ -959,9 +961,15 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
       {pacotesChurrasco?.length>0&&(
         <div style={{background:"#2A1000",border:`2px solid ${C.primary}`,borderRadius:14,
           marginBottom:14,overflow:"hidden"}}>
-          <div onClick={()=>setShowChurrascoItems(s=>!s)}
-            style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-              padding:"14px 16px",cursor:"pointer"}}>
+          <div onClick={()=>{
+            setShowChurrascoItems(s=>!s);
+            if(!showChurrascoItems){
+              const init={};
+              pacotesChurrasco.forEach(p=>{init[p.id]=p.pesoAtual.toFixed(3);});
+              setChurrascoAjustes(init);
+            }
+          }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"14px 16px",cursor:"pointer"}}>
             <div>
               <div style={{fontWeight:800,fontSize:16,color:C.primary}}>🔥 Preparar Churrasco</div>
               <div style={{fontSize:12,color:C.muted,marginTop:2}}>
@@ -976,30 +984,35 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 const grupos={};
                 pacotesChurrasco.forEach(p=>{
                   if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,pacotes:[]};
-                  grupos[p.corte].kg+=p.pesoAtual;
                   grupos[p.corte].pacotes.push(p);
+                  grupos[p.corte].kg+=parseFloat(churrascoAjustes[p.id])||p.pesoAtual;
                 });
                 return Object.values(grupos).map(g=>(
-                  <div key={g.corte} style={{background:C.primary+"18",borderRadius:10,
-                    padding:"10px 12px",marginBottom:8}}>
+                  <div key={g.corte} style={{background:C.primary+"18",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <div>
                         <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
-                        <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>
-                          {g.tipo} · {g.local}
-                        </span>
+                        <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>{g.tipo} · {g.local}</span>
                       </div>
-                      <span style={{fontWeight:800,fontSize:15,color:C.primary}}>{fmtKg(g.kg)}</span>
+                      <span style={{fontWeight:800,fontSize:14,color:C.primary}}>{fmtKg(g.kg)}</span>
                     </div>
                     {g.pacotes.map((p,i)=>(
                       <div key={p.id} style={{display:"flex",justifyContent:"space-between",
-                        alignItems:"center",padding:"5px 4px",borderTop:`1px solid ${C.border}44`}}>
-                        <span style={{fontSize:12,color:C.muted}}>Pacote {i+1} · {fmtKg(p.pesoAtual)}</span>
-                        <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
-                          style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
-                            padding:"3px 8px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:600}}>
-                          ✕ Não retirar
-                        </button>
+                        alignItems:"center",padding:"6px 4px",borderTop:`1px solid ${C.border}44`,gap:8}}>
+                        <span style={{fontSize:12,color:C.muted,flexShrink:0}}>Pacote {i+1}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flex:1,justifyContent:"flex-end"}}>
+                          <input type="number" step="0.001" min="0" max={p.pesoAtual}
+                            value={churrascoAjustes[p.id]??p.pesoAtual.toFixed(3)}
+                            onChange={e=>setChurrascoAjustes(prev=>({...prev,[p.id]:e.target.value}))}
+                            onFocus={e=>e.target.select()}
+                            style={{...inputBase,width:90,textAlign:"right",padding:"4px 8px",fontSize:12}}/>
+                          <span style={{fontSize:11,color:C.muted}}>kg</span>
+                          <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
+                            style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
+                              padding:"3px 7px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:600,flexShrink:0}}>
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1009,9 +1022,9 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 <button onClick={onCancelChurrasco}
                   style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
                     borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
-                  ❌ Cancelar tudo
+                  ❌ Cancelar
                 </button>
-                <button onClick={onConfirmChurrasco}
+                <button onClick={()=>onConfirmChurrasco(churrascoAjustes)}
                   style={{flex:2,background:C.primary,border:"none",
                     borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
                   ✅ Confirmar saída
@@ -1026,9 +1039,15 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
       {pacotesRefeicao?.length>0&&(
         <div style={{background:C.card,border:`2px solid ${C.success}`,borderRadius:14,
           marginBottom:14,overflow:"hidden"}}>
-          <div onClick={()=>setShowRefeicaoItems(s=>!s)}
-            style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-              padding:"14px 16px",cursor:"pointer"}}>
+          <div onClick={()=>{
+            setShowRefeicaoItems(s=>!s);
+            if(!showRefeicaoItems){
+              const init={};
+              pacotesRefeicao.forEach(p=>{init[p.id]=p.pesoAtual.toFixed(3);});
+              setRefeicaoAjustes(init);
+            }
+          }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            padding:"14px 16px",cursor:"pointer"}}>
             <div>
               <div style={{fontWeight:800,fontSize:16,color:C.success}}>🍽️ Preparar Refeição</div>
               <div style={{fontSize:12,color:C.muted,marginTop:2}}>
@@ -1043,30 +1062,35 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 const grupos={};
                 pacotesRefeicao.forEach(p=>{
                   if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,pacotes:[]};
-                  grupos[p.corte].kg+=p.pesoAtual;
                   grupos[p.corte].pacotes.push(p);
+                  grupos[p.corte].kg+=parseFloat(refeicaoAjustes[p.id])||p.pesoAtual;
                 });
                 return Object.values(grupos).map(g=>(
-                  <div key={g.corte} style={{background:C.success+"18",borderRadius:10,
-                    padding:"10px 12px",marginBottom:8}}>
+                  <div key={g.corte} style={{background:C.success+"18",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                       <div>
                         <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
-                        <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>
-                          {g.tipo} · {g.local}
-                        </span>
+                        <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>{g.tipo} · {g.local}</span>
                       </div>
-                      <span style={{fontWeight:800,fontSize:15,color:C.success}}>{fmtKg(g.kg)}</span>
+                      <span style={{fontWeight:800,fontSize:14,color:C.success}}>{fmtKg(g.kg)}</span>
                     </div>
                     {g.pacotes.map((p,i)=>(
                       <div key={p.id} style={{display:"flex",justifyContent:"space-between",
-                        alignItems:"center",padding:"5px 4px",borderTop:`1px solid ${C.border}44`}}>
-                        <span style={{fontSize:12,color:C.muted}}>Pacote {i+1} · {fmtKg(p.pesoAtual)}</span>
-                        <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
-                          style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
-                            padding:"3px 8px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:600}}>
-                          ✕ Não retirar
-                        </button>
+                        alignItems:"center",padding:"6px 4px",borderTop:`1px solid ${C.border}44`,gap:8}}>
+                        <span style={{fontSize:12,color:C.muted,flexShrink:0}}>Pacote {i+1}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flex:1,justifyContent:"flex-end"}}>
+                          <input type="number" step="0.001" min="0" max={p.pesoAtual}
+                            value={refeicaoAjustes[p.id]??p.pesoAtual.toFixed(3)}
+                            onChange={e=>setRefeicaoAjustes(prev=>({...prev,[p.id]:e.target.value}))}
+                            onFocus={e=>e.target.select()}
+                            style={{...inputBase,width:90,textAlign:"right",padding:"4px 8px",fontSize:12}}/>
+                          <span style={{fontSize:11,color:C.muted}}>kg</span>
+                          <button onClick={()=>onTogglePacoteChurrasco(p.meatId,p.id)}
+                            style={{background:"none",border:`1px solid ${C.danger}55`,borderRadius:6,
+                              padding:"3px 7px",cursor:"pointer",color:C.danger,fontSize:11,fontWeight:600,flexShrink:0}}>
+                            ✕
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1076,9 +1100,9 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 <button onClick={onCancelRefeicao}
                   style={{flex:1,background:C.danger+"22",border:`1px solid ${C.danger}55`,
                     borderRadius:10,padding:"11px",cursor:"pointer",color:C.danger,fontSize:13,fontWeight:700}}>
-                  ❌ Cancelar tudo
+                  ❌ Cancelar
                 </button>
-                <button onClick={onConfirmRefeicao}
+                <button onClick={()=>onConfirmRefeicao(refeicaoAjustes)}
                   style={{flex:2,background:C.success,border:"none",
                     borderRadius:10,padding:"11px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:800}}>
                   ✅ Confirmar saída
@@ -3534,7 +3558,7 @@ export default function App() {
   const cancelRefeicao  = () => cancelGrupo("consumo");
 
   // ── Confirma saída de um grupo ─────────────────────────────────────────────
-  const confirmGrupo = (utilidade) => {
+  const confirmGrupo = (utilidade, ajustes={}) => {
     const motivo = utilidade==="consumo" ? "consumo" : "churrasco";
     const grupoMeats = meats.filter(m=>
       m.utilidade===utilidade &&
@@ -3545,7 +3569,13 @@ export default function App() {
       if(!(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido")) return m;
       const updatedPacs=(m.pacotes||[]).map(p=>{
         if(!p.churrasco||p.status==="consumido") return {...p,churrasco:false};
-        return {...p,pesoAtual:0,status:"consumido",churrasco:false};
+        const ajuste = ajustes[p.id];
+        const pesoRetirar = ajuste!==undefined
+          ? Math.min(Math.max(parseFloat(ajuste)||0, 0), p.pesoAtual)
+          : p.pesoAtual;
+        const novoPeso = Math.round((p.pesoAtual-pesoRetirar)*1000)/1000;
+        if(novoPeso<=0) return {...p,pesoAtual:0,status:"consumido",churrasco:false};
+        return {...p,pesoAtual:novoPeso,churrasco:false,status:"aberto"};
       });
       const novoTotal=Math.round(updatedPacs.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
       return {...m,pacotes:updatedPacs,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"};
@@ -3553,7 +3583,12 @@ export default function App() {
     setMeats(newMeats);
     grupoMeats.forEach(m=>{
       const cPacs=(m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido");
-      const totalRet=Math.round(cPacs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+      const totalRet=Math.round(cPacs.reduce((s,p)=>{
+        const ajuste=ajustes[p.id];
+        const ret=ajuste!==undefined?Math.min(Math.max(parseFloat(ajuste)||0,0),p.pesoAtual):p.pesoAtual;
+        return s+ret;
+      },0)*1000)/1000;
+      if(totalRet<=0) return;
       setExits(prev=>[...prev,{
         id:uid(),tipo:m.tipo,corte:m.corte,local:m.local,
         carneNome:m.corte||m.tipo,pesoRetirado:totalRet,
@@ -3570,8 +3605,8 @@ export default function App() {
       }
     }
   };
-  const confirmChurrasco = () => confirmGrupo("churrasco");
-  const confirmRefeicao  = () => confirmGrupo("consumo");
+  const confirmChurrasco = (ajustes) => confirmGrupo("churrasco", ajustes);
+  const confirmRefeicao  = (ajustes) => confirmGrupo("consumo",   ajustes);
 
   // ── Pacotes marcados — separados por utilidade ─────────────────────────────
   const allMarcados = meats.flatMap(m=>
