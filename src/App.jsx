@@ -806,23 +806,38 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               ? <div style={{color:C.muted,textAlign:"center",padding:"12px 0",fontSize:13}}>
                   Lista vazia — toque em ＋ para adicionar
                 </div>
-              : shoppingList.map(item=>(
-                  <div key={item.id} style={{display:"flex",justifyContent:"space-between",
-                    alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-                    <div>
-                      <div style={{fontWeight:700,fontSize:14}}>{item.nome}</div>
-                      <div style={{fontSize:11,color:C.muted,marginTop:2}}>
-                        {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
+              : shoppingList.map(item=>{
+                  // Busca estoque atual desse item
+                  const stockMeats = meats.filter(m=>
+                    (m.corte||m.tipo).toLowerCase()===item.nome.toLowerCase()
+                  );
+                  const totalPacotes = stockMeats.reduce((s,m)=>(m.pacotes||[]).filter(p=>p.status!=="consumido").length+s, 0);
+                  const totalPeso    = stockMeats.reduce((s,m)=>s+m.pesoTotal, 0);
+                  const temEstoque   = totalPeso > 0;
+                  return (
+                    <div key={item.id} style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:14}}>{item.nome}</div>
+                        <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                          {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
+                        </div>
+                        <div style={{fontSize:11,marginTop:3,fontWeight:600,
+                          color:temEstoque?C.success:C.danger}}>
+                          {temEstoque
+                            ? `📦 ${totalPacotes} pacote${totalPacotes!==1?"s":""} · ${fmtKg(totalPeso)} em estoque`
+                            : "⚠️ Sem estoque"}
+                        </div>
                       </div>
+                      <button onClick={()=>onRemoveFromShoppingList(item.id)}
+                        style={{background:C.success+"22",border:`1px solid ${C.success}55`,
+                          borderRadius:8,padding:"5px 12px",cursor:"pointer",
+                          color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap",marginLeft:8}}>
+                        ✓ Comprei
+                      </button>
                     </div>
-                    <button onClick={()=>onRemoveFromShoppingList(item.id)}
-                      style={{background:C.success+"22",border:`1px solid ${C.success}55`,
-                        borderRadius:8,padding:"5px 12px",cursor:"pointer",
-                        color:C.success,fontSize:12,fontWeight:700,whiteSpace:"nowrap",marginLeft:8}}>
-                      ✓ Comprei
-                    </button>
-                  </div>
-                ))
+                  );
+                })
             }
           </div>
         )}
