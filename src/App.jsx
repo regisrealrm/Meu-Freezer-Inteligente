@@ -916,10 +916,10 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             {[item.tipo,item.origem,item.utilidade].filter(Boolean).join(" · ")}
                           </div>
                           <div style={{fontSize:11,marginTop:3,fontWeight:600,
-                            color:peso>0?C.success:C.muted}}>
+                            color:peso>0?C.success:C.danger}}>
                             {peso>0
                               ? `📦 ${pcts} pacote${pcts!==1?"s":""} · ${fmtKg(peso)}`
-                              : "Sem estoque"}
+                              : "⚠️ Sem estoque"}
                           </div>
                         </div>
                         {jaAdicionado
