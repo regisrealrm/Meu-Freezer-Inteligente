@@ -2794,23 +2794,33 @@ function Relatorios({meats,exits}) {
       <Card style={{marginBottom:14}}>
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📅 Período dos históricos</div>
 
-        {/* Datas lado a lado compactas */}
+        {/* Datas — botão estilizado com input invisível por cima (funciona no iOS) */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-          <div>
-            <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>De</div>
-            <input type="date" value={dataInicio} onChange={e=>setDataInicio(e.target.value)}
-              style={{...inputBase,width:"100%",padding:"8px 10px",fontSize:13,
-                boxSizing:"border-box",height:40}}/>
-          </div>
-          <div>
-            <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>Até</div>
-            <input type="date" value={dataFim} onChange={e=>setDataFim(e.target.value)}
-              style={{...inputBase,width:"100%",padding:"8px 10px",fontSize:13,
-                boxSizing:"border-box",height:40}}/>
-          </div>
+          {[
+            {label:"De", value:dataInicio, set:setDataInicio},
+            {label:"Até", value:dataFim,   set:setDataFim},
+          ].map(({label,value,set})=>{
+            const display = value
+              ? new Date(value+"T12:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"})
+              : "—";
+            return (
+              <div key={label}>
+                <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>{label}</div>
+                <div style={{position:"relative",borderRadius:10,background:C.light,
+                  border:`1px solid ${C.border}`,padding:"10px 12px",
+                  display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:13,color:C.muted}}>📅</span>
+                  <span style={{fontSize:13,fontWeight:600,color:C.text}}>{display}</span>
+                  <input type="date" value={value} onChange={e=>set(e.target.value)}
+                    style={{position:"absolute",inset:0,opacity:0,cursor:"pointer",
+                      width:"100%",height:"100%",border:"none"}}/>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Atalhos em grid 2x2 */}
+        {/* Atalhos em grade 2×2 */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
           {[
             {l:"Este mês",        di:hoje.slice(0,7)+"-01", df:hoje},
