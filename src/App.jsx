@@ -2793,28 +2793,35 @@ function Relatorios({meats,exits}) {
       {/* Filtro de período */}
       <Card style={{marginBottom:14}}>
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📅 Período dos históricos</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+
+        {/* Datas lado a lado compactas */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
           <div>
             <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>De</div>
             <input type="date" value={dataInicio} onChange={e=>setDataInicio(e.target.value)}
-              style={{...inputBase,width:"100%",padding:"9px 10px",fontSize:14,boxSizing:"border-box"}}/>
+              style={{...inputBase,width:"100%",padding:"8px 10px",fontSize:13,
+                boxSizing:"border-box",height:40}}/>
           </div>
           <div>
             <div style={{fontSize:11,color:C.muted,fontWeight:600,marginBottom:4}}>Até</div>
             <input type="date" value={dataFim} onChange={e=>setDataFim(e.target.value)}
-              style={{...inputBase,width:"100%",padding:"9px 10px",fontSize:14,boxSizing:"border-box"}}/>
+              style={{...inputBase,width:"100%",padding:"8px 10px",fontSize:13,
+                boxSizing:"border-box",height:40}}/>
           </div>
         </div>
-        <div style={{display:"flex",gap:8,marginBottom:mostrar?12:0,flexWrap:"wrap"}}>
+
+        {/* Atalhos em grid 2x2 */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
           {[
-            {l:"Este mês",   di:hoje.slice(0,7)+"-01", df:hoje},
-            {l:"Mês passado",di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)+"-01";})(),
-                             df:(()=>{const d=new Date(hoje);d.setDate(0);return d.toISOString().slice(0,10);})()},
-            {l:"Últimos 3 meses",di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-3);return d.toISOString().slice(0,10);})(), df:hoje},
-            {l:"Este ano",   di:hoje.slice(0,4)+"-01-01", df:hoje},
+            {l:"Este mês",        di:hoje.slice(0,7)+"-01", df:hoje},
+            {l:"Mês passado",     di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)+"-01";})(),
+                                  df:(()=>{const d=new Date(hoje);d.setDate(0);return d.toISOString().slice(0,10);})()},
+            {l:"Últimos 3 meses", di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-3);return d.toISOString().slice(0,10);})(), df:hoje},
+            {l:"Este ano",        di:hoje.slice(0,4)+"-01-01", df:hoje},
           ].map(({l,di,df})=>(
             <button key={l} onClick={()=>{setDataInicio(di);setDataFim(df);setMostrar(false);}}
-              style={{fontSize:11,padding:"5px 10px",borderRadius:8,cursor:"pointer",fontWeight:600,
+              style={{fontSize:12,padding:"8px 6px",borderRadius:8,cursor:"pointer",
+                fontWeight:600,textAlign:"center",
                 background:(dataInicio===di&&dataFim===df)?C.info+"22":C.light,
                 border:`1px solid ${(dataInicio===di&&dataFim===df)?C.info:C.border}`,
                 color:(dataInicio===di&&dataFim===df)?C.info:C.muted}}>
@@ -2822,6 +2829,7 @@ function Relatorios({meats,exits}) {
             </button>
           ))}
         </div>
+
         <button onClick={()=>setMostrar(true)}
           style={{width:"100%",background:C.info,border:"none",borderRadius:10,
             padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
