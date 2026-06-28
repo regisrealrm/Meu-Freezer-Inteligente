@@ -983,7 +983,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               {(()=>{
                 const grupos={};
                 pacotesChurrasco.forEach(p=>{
-                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,pacotes:[]};
+                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,origem:p.origem||"",kg:0,pacotes:[]};
                   grupos[p.corte].pacotes.push(p);
                   grupos[p.corte].kg+=parseFloat(churrascoAjustes[p.id])||p.pesoAtual;
                 });
@@ -993,6 +993,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       <div>
                         <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
                         <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>{g.tipo} · {g.local}</span>
+                      {g.origem&&g.origem!=="—"&&<span style={{fontSize:13,marginLeft:6}}>{g.origem==="do sol"?"☀️":g.origem==="temperada"?"🌶️":"🌿"}</span>}
                       </div>
                       <span style={{fontWeight:800,fontSize:14,color:C.primary}}>{fmtKg(g.kg)}</span>
                     </div>
@@ -1061,7 +1062,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               {(()=>{
                 const grupos={};
                 pacotesRefeicao.forEach(p=>{
-                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,kg:0,pacotes:[]};
+                  if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,local:p.local,origem:p.origem||"",kg:0,pacotes:[]};
                   grupos[p.corte].pacotes.push(p);
                   grupos[p.corte].kg+=parseFloat(refeicaoAjustes[p.id])||p.pesoAtual;
                 });
@@ -1071,6 +1072,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       <div>
                         <span style={{fontWeight:700,fontSize:14,color:C.text}}>{g.corte}</span>
                         <span style={{fontSize:11,color:C.muted,marginLeft:8,textTransform:"capitalize"}}>{g.tipo} · {g.local}</span>
+                      {g.origem&&g.origem!=="—"&&<span style={{fontSize:13,marginLeft:6}}>{g.origem==="do sol"?"☀️":g.origem==="temperada"?"🌶️":"🌿"}</span>}
                       </div>
                       <span style={{fontWeight:800,fontSize:14,color:C.success}}>{fmtKg(g.kg)}</span>
                     </div>
