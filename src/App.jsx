@@ -734,6 +734,16 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   borderLeft:`4px solid ${pal.color}`}}>
                 <div style={{fontSize:11,color:pal.color,fontWeight:700}}>{pal.icon} {u}</div>
                 <div style={{fontSize:18,fontWeight:800,color:pal.color}}>{fmtKg(kg)}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"2px 8px",marginTop:3,marginBottom:2}}>
+                  {(()=>{
+                    const origemIcon = o=>o==="do sol"?"☀️":o==="temperada"?"🌶️":"🌿";
+                    const origens=[...new Set(items.map(m=>m.origem).filter(Boolean))];
+                    return origens.map(o=>{
+                      const kgO=items.filter(m=>m.origem===o).reduce((s,m)=>s+m.pesoTotal,0);
+                      return kgO>0&&<span key={o} style={{fontSize:10,color:C.muted}}>{origemIcon(o)} {fmtKg(kgO)}</span>;
+                    });
+                  })()}
+                </div>
                 <div style={{fontSize:11,color:C.muted}}>{items.length} item{items.length!==1?"s":""} · {openUtil===u?"▲":"▼"}</div>
               </div>
             ))}
