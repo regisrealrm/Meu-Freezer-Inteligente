@@ -2790,11 +2790,17 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       }
 
       // 2ª passada — se ainda faltar peso e nada coube no teto, usa outros cortes mesmo
-      // estourando o limite, priorizando sempre o maior pacote disponível entre os restantes
+      // estourando o limite — escolhe o MENOR pacote que já seja suficiente pra fechar a conta
+      // (minimiza o excedente); só usa o maior disponível se nenhum sozinho bastar
       while(soma<kgPerTipo){
-        const candidatos = pool.filter(podeUsar).sort((a,b)=>b.peso-a.peso);
+        const candidatos = pool.filter(podeUsar);
         if(!candidatos.length) break;
-        usar(candidatos[0]);
+        const falta = Math.round((kgPerTipo-soma)*1000)/1000;
+        const suficientes = candidatos.filter(p=>p.peso>=falta).sort((a,b)=>a.peso-b.peso);
+        const escolhido = suficientes.length
+          ? suficientes[0]
+          : [...candidatos].sort((a,b)=>b.peso-a.peso)[0];
+        usar(escolhido);
       }
 
       // Regra universal — nunca sugere comprar mais, a diversidade de cortes é o objetivo
