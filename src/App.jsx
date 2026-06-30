@@ -2755,11 +2755,8 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       // Limite de pacotes para o tipo inteiro (frango/suína: 1 pacote a cada 10 pessoas)
       const tipoCap = (tipo==="frango"||tipo==="suína") ? ratio : Infinity;
 
-      // Se TODOS os cortes disponíveis desse tipo são itens com regra (denver/picanha/pão de alho),
-      // o tipo inteiro é considerado limitado — não faz sentido sugerir comprar mais
-      const limitedCorte = corte => isDenver(corte)||isPicanha(corte)||isPaoAlho(corte);
-      const allCortesLimited = allPkgs.length>0 && allPkgs.every(p=>limitedCorte(p.corte));
-      const tipoLimitado = tipoCap!==Infinity || allCortesLimited;
+      // Regra universal: TODO corte é limitado a 1 pacote a cada 10 pessoas
+      const tipoLimitado = true;
 
       // Denver sempre priorizado primeiro; dentro de cada grupo, pacotes mais antigos primeiro (FIFO)
       const byOldest = (a,b) => new Date(a.dataEntrada||0) - new Date(b.dataEntrada||0);
@@ -2776,16 +2773,14 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
         if(soma>=kgPerTipo) break;
         if(Math.round((soma+p.peso)*1000)/1000>tetoKg) continue;
         const ck = stripAcc(p.corte.toLowerCase());
-        if(isDenver(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
-        if(isPicanha(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
-        if(isPaoAlho(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
+        if((corteCounts[ck]||0)>=ratio) continue; // regra universal: 1 pacote por corte a cada 10 pessoas
         selecionados.push(p);
         soma=Math.round((soma+p.peso)*1000)/1000;
         corteCounts[ck]=(corteCounts[ck]||0)+1;
       }
 
-      // Tipos/cortes limitados por regra nunca sugerem comprar mais
-      const falta = tipoLimitado ? 0 : Math.max(0,Math.round((kgPerTipo-soma)*1000)/1000);
+      // Regra universal — nunca sugere comprar mais, a diversidade de cortes é o objetivo
+      const falta = 0;
 
       return {tipo, needed:kgPerTipo, selecionados, totalSugg:soma, falta, tipoLimitado, capLimit:tipoCap};
     });
@@ -2888,7 +2883,7 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
               {fmtKg(result.totalKg/result.byTipo.length)} por tipo · {result.byTipo.length} tipo{result.byTipo.length!==1?"s":""}
             </div>
             <div style={{fontSize:11,color:C.dim,marginTop:2}}>
-              📏 Regras a cada 10 pessoas: {result.ratio} pacote{result.ratio!==1?"s":""} (Denver, frango, suína, picanha, pão de alho)
+              📏 Regra universal: máximo {result.ratio} pacote{result.ratio!==1?"s":""} por corte a cada 10 pessoas
             </div>
           </Card>
 
@@ -2924,8 +2919,6 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
                   <>
                     {Object.values(porCorte).map(({corte,pkgs})=>{
                       const denver = isDenver(corte);
-                      const picCap = isPicanha(corte);
-                      const paoCap = isPaoAlho(corte);
                       return (
                         <div key={corte} style={{display:"flex",justifyContent:"space-between",
                           alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}44`}}>
@@ -2936,9 +2929,7 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
                             <span style={{fontSize:11,color:C.muted,marginLeft:8}}>
                               {pkgs.length} pacote{pkgs.length!==1?"s":""}
                             </span>
-                            {(denver||picCap||paoCap)&&(
-                              <span style={{fontSize:10,color:C.warning,marginLeft:6}}>📏 limitado</span>
-                            )}
+                            <span style={{fontSize:10,color:C.warning,marginLeft:6}}>📏 limitado</span>
                           </div>
                           <span style={{fontWeight:700,color:accent,fontSize:13}}>
                             {fmtKg(Math.round(pkgs.reduce((s,p)=>s+p,0)*1000)/1000)}
@@ -2961,16 +2952,6 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
                   </>
                 ) : (
                   <div style={{color:C.muted,fontSize:13,padding:"4px 0"}}>Sem pacotes em estoque</div>
-                )}
-
-                {falta>0&&!tipoLimitado&&(
-                  <div style={{background:C.danger+"15",border:`1px solid ${C.danger}44`,
-                    borderRadius:8,padding:"8px 10px",marginTop:8,fontSize:13}}>
-                    🛒 <strong style={{color:C.danger}}>Comprar:</strong>
-                    <span style={{color:C.muted,marginLeft:6}}>
-                      ~{fmtKg(falta)} faltando — compre pelo menos 1 pacote de {tipo}
-                    </span>
-                  </div>
                 )}
 
                 {selecionados.length>0&&(
@@ -3001,17 +2982,21 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
               <span style={{color:C.muted}}>🧊 Sugerido do estoque</span>
               <strong style={{color:C.success}}>{fmtKg(Math.round(result.byTipo.reduce((s,t)=>s+t.totalSugg,0)*1000)/1000)}</strong>
             </div>
-            {result.byTipo.some(t=>t.falta>0)&&(
-              <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0"}}>
-                <span style={{color:C.muted}}>🛒 A comprar</span>
-                <strong style={{color:C.danger}}>{fmtKg(Math.round(result.byTipo.reduce((s,t)=>s+t.falta,0)*1000)/1000)}</strong>
-              </div>
-            )}
-            {!result.byTipo.some(t=>t.falta>0)&&(
-              <div style={{textAlign:"center",padding:"8px 0",color:C.success,fontWeight:700,fontSize:14}}>
-                ✅ Estoque suficiente para o churrasco!
-              </div>
-            )}
+            {(()=>{
+              const naoCoberto = Math.round(
+                result.byTipo.reduce((s,t)=>s+Math.max(0,t.needed-t.totalSugg),0)*1000
+              )/1000;
+              return naoCoberto>0 ? (
+                <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0"}}>
+                  <span style={{color:C.warning,fontSize:12}}>📏 Não coberto (regra de 1 pacote/corte)</span>
+                  <strong style={{color:C.warning}}>{fmtKg(naoCoberto)}</strong>
+                </div>
+              ) : (
+                <div style={{textAlign:"center",padding:"8px 0",color:C.success,fontWeight:700,fontSize:14}}>
+                  ✅ Estoque suficiente para o churrasco!
+                </div>
+              );
+            })()}
           </Card>
 
           <button onClick={()=>{
