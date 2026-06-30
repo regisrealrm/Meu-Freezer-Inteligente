@@ -2702,7 +2702,251 @@ function Saida({meats,onRegister,setTab}) {
 }
 
 // ─── CHURRASCÔMETRO ───────────────────────────────────────────────────────────
-const PERFIL_G = {pouco:300,normal:400,muito:500}
+const PERFIL_G = {pouco:300,normal:400,muito:500};
+
+function Churrasometro({meats}) {
+  const [adultos,   setAdultos]   = useState(10);
+  const [criancas,  setCriancas]  = useState(4);
+  const [perfil,    setPerfil]    = useState("normal");
+  const [longo,     setLongo]     = useState(false);
+  const [selTipos,  setSelTipos]  = useState([]);
+  const [result,    setResult]    = useState(null);
+
+  // Todos os tipos que têm pacotes de churrasco em estoque
+  const tiposDisponiveis = (() => {
+    const tipos = [...new Set(
+      meats.filter(m=>m.utilidade==="churrasco"&&m.pesoTotal>0).map(m=>m.tipo)
+    )].filter(Boolean).sort((a,b)=>a.localeCompare(b,"pt"));
+    return tipos;
+  })();
+
+  const toggleTipo = t => {
+    setSelTipos(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+    setResult(null);
+  };
+
+  const calcular = () => {
+    if(!selTipos.length) return alert("Selecione ao menos um tipo de carne.");
+    const gAdulto = PERFIL_G[perfil]*(longo?1.2:1);
+    const totalKg = Math.round(((adultos*gAdulto+criancas*gAdulto*0.5)/1000)*1000)/1000;
+    const kgPerTipo = totalKg/selTipos.length;
+
+    const byTipo = selTipos.map(tipo=>{
+      // Pega todos os pacotes ativos de churrasco desse tipo
+      const allPkgs = meats
+        .filter(m=>m.tipo===tipo&&m.utilidade==="churrasco"&&m.pesoTotal>0)
+        .flatMap(m=>(m.pacotes||[])
+          .filter(p=>p.status!=="consumido"&&p.pesoAtual>0)
+          .map(p=>({meatId:m.id,corte:m.corte||m.tipo,pacoteId:p.id,peso:p.pesoAtual}))
+        )
+        .sort((a,b)=>b.peso-a.peso); // maiores primeiro
+
+      // Seleciona pacotes inteiros até atingir ou superar kgPerTipo
+      let soma=0; const selecionados=[];
+      for(const p of allPkgs){
+        if(soma>=kgPerTipo) break;
+        selecionados.push(p);
+        soma=Math.round((soma+p.peso)*1000)/1000;
+      }
+
+      const falta = Math.max(0, Math.round((kgPerTipo-soma)*1000)/1000);
+
+      return {tipo, needed:kgPerTipo, selecionados, totalSugg:soma, falta};
+    });
+
+    setResult({totalKg, adultos, criancas, gAdulto, byTipo});
+  };
+
+  const durBtn = (label,val) => (
+    <button onClick={()=>{setLongo(val);setResult(null);}}
+      style={{flex:1,padding:"10px 0",borderRadius:8,
+        border:`2px solid ${longo===val?C.primary:C.border}`,
+        background:longo===val?C.primary+"22":"#0A1520",
+        color:longo===val?C.primary:C.muted,cursor:"pointer",fontSize:13,fontWeight:600}}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div>
+      <SecTitle icon="🔥" children="Churrascômetro"/>
+
+      {/* Pessoas e perfil */}
+      <Card style={{marginBottom:14}}>
+        <div style={GRID2}>
+          <FInput label="Adultos" type="number" min={1} value={adultos} onFocus={e=>e.target.select()}
+            onChange={e=>{setAdultos(Math.max(1,+e.target.value));setResult(null);}}/>
+          <FInput label="Crianças" type="number" min={0} value={criancas} onFocus={e=>e.target.select()}
+            onChange={e=>{setCriancas(Math.max(0,+e.target.value));setResult(null);}}/>
+          <FSelect label="Apetite" value={perfil} onChange={e=>{setPerfil(e.target.value);setResult(null);}}>
+            <option value="pouco">Come pouco — 300g/adulto</option>
+            <option value="normal">Normal — 400g/adulto</option>
+            <option value="muito">Come muito — 500g/adulto</option>
+          </FSelect>
+          <FWrap>
+            <FLabel>Duração</FLabel>
+            <div style={{display:"flex",gap:8}}>
+              {durBtn("Normal",false)}
+              {durBtn("Longo +20%",true)}
+            </div>
+          </FWrap>
+        </div>
+      </Card>
+
+      {/* Seleção de tipos */}
+      <div style={{fontWeight:700,fontSize:14,marginBottom:10,color:C.text}}>
+        🥩 Quais tipos de carne vai servir?
+      </div>
+      {tiposDisponiveis.length===0 ? (
+        <Card style={{marginBottom:14}}>
+          <div style={{color:C.muted,textAlign:"center",padding:8}}>
+            Nenhum item com utilidade "churrasco" em estoque.
+          </div>
+        </Card>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {tiposDisponiveis.map(tipo=>{
+            const on     = selTipos.includes(tipo);
+            const accent = TIPO_COLORS[tipo]||C.muted;
+            const pkgs   = meats.filter(m=>m.tipo===tipo&&m.utilidade==="churrasco"&&m.pesoTotal>0)
+              .flatMap(m=>(m.pacotes||[]).filter(p=>p.status!=="consumido"&&p.pesoAtual>0));
+            const totalKgTipo = Math.round(pkgs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
+            return (
+              <div key={tipo} onClick={()=>toggleTipo(tipo)}
+                style={{background:on?accent+"1A":C.card,border:`2px solid ${on?accent:C.border}`,
+                  borderRadius:10,padding:"12px 14px",cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:22,height:22,borderRadius:6,flexShrink:0,
+                  background:on?accent:"transparent",border:`2px solid ${on?accent:C.dim}`,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {on&&<span style={{color:"#fff",fontSize:12,fontWeight:900}}>✓</span>}
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:15,textTransform:"capitalize"}}>{tipo}</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                    {pkgs.length} pacote{pkgs.length!==1?"s":" "} · {fmtKg(totalKgTipo)} em estoque
+                  </div>
+                </div>
+                <div style={{fontWeight:800,color:accent,fontSize:15}}>{fmtKg(totalKgTipo)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Btn onClick={calcular} disabled={!selTipos.length}>🔥 Calcular churrasco</Btn>
+
+      {/* Resultado */}
+      {result&&(
+        <>
+          {/* Total */}
+          <Card style={{background:"#1A1800",borderColor:"#FF6B3555",marginTop:16,marginBottom:14,textAlign:"center"}}>
+            <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Total necessário</div>
+            <div style={{fontSize:52,fontWeight:900,color:C.primary,lineHeight:1}}>{fmtKg(result.totalKg)}</div>
+            <div style={{fontSize:13,color:C.muted,marginTop:6}}>
+              {result.adultos} adultos × {result.gAdulto.toFixed(0)}g
+              {result.criancas>0&&` + ${result.criancas} crianças × ${(result.gAdulto*0.5).toFixed(0)}g`}
+            </div>
+            <div style={{fontSize:12,color:C.dim,marginTop:4}}>
+              {fmtKg(result.totalKg/result.byTipo.length)} por tipo · {result.byTipo.length} tipo{result.byTipo.length!==1?"s":""}
+            </div>
+          </Card>
+
+          {/* Por tipo */}
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>📋 Sugestão por tipo</div>
+          {result.byTipo.map(({tipo,needed,selecionados,totalSugg,falta})=>{
+            const accent = TIPO_COLORS[tipo]||C.muted;
+            const ok = falta===0;
+            // Agrupa por corte
+            const porCorte = {};
+            selecionados.forEach(p=>{
+              if(!porCorte[p.corte]) porCorte[p.corte]={corte:p.corte,pkgs:[]};
+              porCorte[p.corte].pkgs.push(p.peso);
+            });
+            return (
+              <Card key={tipo} style={{marginBottom:10,borderLeft:`4px solid ${accent}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontWeight:800,fontSize:16,textTransform:"capitalize",color:accent}}>{tipo}</div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:11,color:C.muted}}>necessário</div>
+                    <div style={{fontWeight:700,color:C.text}}>{fmtKg(needed)}</div>
+                  </div>
+                </div>
+
+                {selecionados.length>0 ? (
+                  <>
+                    {Object.values(porCorte).map(({corte,pkgs})=>(
+                      <div key={corte} style={{display:"flex",justifyContent:"space-between",
+                        alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}44`}}>
+                        <div>
+                          <span style={{fontWeight:600,fontSize:13}}>{corte}</span>
+                          <span style={{fontSize:11,color:C.muted,marginLeft:8}}>
+                            {pkgs.length} pacote{pkgs.length!==1?"s":""}
+                          </span>
+                        </div>
+                        <span style={{fontWeight:700,color:accent,fontSize:13}}>
+                          {fmtKg(Math.round(pkgs.reduce((s,p)=>s+p,0)*1000)/1000)}
+                        </span>
+                      </div>
+                    ))}
+                    <div style={{display:"flex",justifyContent:"space-between",
+                      alignItems:"center",marginTop:8,paddingTop:6,
+                      borderTop:`1px solid ${C.border}`}}>
+                      <span style={{fontSize:12,color:ok?C.success:C.warning,fontWeight:600}}>
+                        {ok?`✅ Total: ${fmtKg(totalSugg)}`:`⚠️ Total: ${fmtKg(totalSugg)}`}
+                        {totalSugg>needed&&ok&&
+                          <span style={{fontSize:10,color:C.muted,marginLeft:6}}>
+                            (+{fmtKg(Math.round((totalSugg-needed)*1000)/1000)} a mais — ok)
+                          </span>
+                        }
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{color:C.muted,fontSize:13,padding:"4px 0"}}>Sem pacotes em estoque</div>
+                )}
+
+                {falta>0&&(
+                  <div style={{background:C.danger+"15",border:`1px solid ${C.danger}44`,
+                    borderRadius:8,padding:"8px 10px",marginTop:8,fontSize:13}}>
+                    🛒 <strong style={{color:C.danger}}>Comprar:</strong>
+                    <span style={{color:C.muted,marginLeft:6}}>
+                      ~{fmtKg(falta)} faltando — compre pelo menos 1 pacote de {tipo}
+                    </span>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+
+          {/* Resumo */}
+          <Card style={{background:"#0D1B2A",border:`1px solid ${C.border}`,marginTop:4}}>
+            <div style={{fontWeight:700,marginBottom:12,fontSize:15}}>📊 Resumo</div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{color:C.muted}}>Necessário</span>
+              <strong style={{color:C.primary}}>{fmtKg(result.totalKg)}</strong>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+              <span style={{color:C.muted}}>🧊 Sugerido do estoque</span>
+              <strong style={{color:C.success}}>{fmtKg(Math.round(result.byTipo.reduce((s,t)=>s+t.totalSugg,0)*1000)/1000)}</strong>
+            </div>
+            {result.byTipo.some(t=>t.falta>0)&&(
+              <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0"}}>
+                <span style={{color:C.muted}}>🛒 A comprar</span>
+                <strong style={{color:C.danger}}>{fmtKg(Math.round(result.byTipo.reduce((s,t)=>s+t.falta,0)*1000)/1000)}</strong>
+              </div>
+            )}
+            {!result.byTipo.some(t=>t.falta>0)&&(
+              <div style={{textAlign:"center",padding:"8px 0",color:C.success,fontWeight:700,fontSize:14}}>
+                ✅ Estoque suficiente para o churrasco!
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ─── RELATÓRIOS ───────────────────────────────────────────────────────────────
 function Relatorios({meats,exits}) {
