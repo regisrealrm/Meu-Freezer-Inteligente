@@ -436,12 +436,12 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               {(()=>{
                 const gerarEstoquePDF = (filtered) => {
                 const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
-                const locais=[...new Set(filtered.map(m=>m.local).filter(Boolean))];
                 const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                const tipos=[...new Set(filtered.map(m=>m.tipo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
                 const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Estoque</title>
                   <style>
                     body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
-                    h1{margin:0;font-size:22px;color:#1565c0} h3{margin:20px 0 6px;font-size:14px;color:#333}
+                    h1{margin:0;font-size:22px;color:#1565c0} h3{margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize}
                     table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
                     th{text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px}
                     td{padding:5px 8px;border-bottom:1px solid #eee}
@@ -454,22 +454,23 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                     <h1>📦 Estoque Atual</h1><span style="font-size:12px;color:#666">${now}</span>
                   </div>
                   <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${total.toFixed(3).replace(".",",")} kg</strong></p>
-                  ${locais.map(local=>{
-                    const items=filtered.filter(m=>m.local===local);
+                  ${tipos.map(tipo=>{
+                    const items=[...filtered.filter(m=>m.tipo===tipo)]
+                      .sort((a,b)=>(a.corte||a.tipo).localeCompare(b.corte||b.tipo,"pt"));
                     const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
-                    return `<h3>📍 ${local}</h3>
+                    return `<h3>🥩 ${tipo}</h3>
                     <table><thead><tr>
-                      <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                      <th>Corte</th><th>Local</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
                     </tr></thead>
                     <tbody>${items.map(m=>`<tr>
-                      <td>${m.corte||m.tipo}</td>
-                      <td style="text-transform:capitalize">${m.tipo}</td>
+                      <td style="font-weight:600">${m.corte||m.tipo}</td>
+                      <td>${m.local||"—"}</td>
                       <td>${m.origem||"—"}</td>
                       <td style="text-transform:capitalize">${m.utilidade||"—"}</td>
                       <td>${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
                       <td style="text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
                     </tr>`).join("")}</tbody>
-                    <tfoot><tr><td colspan="5">Total ${local}</td><td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
+                    <tfoot><tr><td colspan="5">Total ${tipo}</td><td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
                     </table>`;
                   }).join("")}
                   <script>window.onload=()=>window.print()<\/script>
@@ -523,7 +524,9 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       utilidade:p.utilidade||"—",precoKg:p.precoKg,kg:0,n:0};
                     grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
                   });
-                  const rows=Object.values(grupos).map(g=>`<tr>
+                  const rows=Object.values(grupos)
+                    .sort((a,b)=>a.tipo.localeCompare(b.tipo,"pt","pt")||a.corte.localeCompare(b.corte,"pt"))
+                    .map(g=>`<tr>
                     <td style="font-weight:600">${g.corte}</td>
                     <td style="text-transform:capitalize">${g.tipo}</td>
                     <td>${g.origem}</td>
@@ -599,7 +602,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               <div style={{display:"flex",gap:8}}>
                 <button onClick={()=>{
                 if(!shoppingList?.length){alert("Lista de compras vazia.");return;}
-                const rows=(shoppingList||[]).map(i=>`<tr>
+                const rows=[...(shoppingList||[])].sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map(i=>`<tr>
                   <td style="font-weight:600">☐  ${i.nome}</td>
                   <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
                   <td style="color:#555">${i.origem||"—"}</td>
