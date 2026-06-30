@@ -473,6 +473,10 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                     <tfoot><tr><td colspan="5">Total ${tipo}</td><td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
                     </table>`;
                   }).join("")}
+                  <div style="margin-top:24px;padding-top:12px;border-top:2px solid #1565c0;display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:15px;font-weight:700;color:#333">Total Geral</span>
+                    <span style="font-size:18px;font-weight:900;color:#1565c0">${total.toFixed(3).replace(".",",")} kg</span>
+                  </div>
                   <script>window.onload=()=>window.print()<\/script>
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
@@ -558,6 +562,10 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       <tfoot><tr><td colspan="3">Total ${tipo}</td><td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
                       </table>`;
                     }).join("")}
+                    <div style="margin-top:24px;padding-top:12px;border-top:2px solid #e65c00;display:flex;justify-content:space-between;align-items:center">
+                      <span style="font-size:15px;font-weight:700;color:#333">Total Geral</span>
+                      <span style="font-size:18px;font-weight:900;color:#e65c00">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</span>
+                    </div>
                     <script>window.onload=()=>window.print()<\/script>
                   </body></html>`;
                 };
@@ -630,6 +638,10 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       <td style="text-align:right;color:#555">${i.precoKg?`R$ ${Number(i.precoKg).toFixed(2).replace(".",",")}`:"-"}</td>
                     </tr>`).join("")}</tbody></table>`;
                   }).join("")}
+                  <div style="margin-top:24px;padding-top:12px;border-top:2px solid #2e7d32;display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:15px;font-weight:700;color:#333">Total de itens</span>
+                    <span style="font-size:18px;font-weight:900;color:#2e7d32">${(shoppingList||[]).length} item${(shoppingList||[]).length!==1?"ns":""}</span>
+                  </div>
                   <script>window.onload=()=>window.print()<\/script>
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
