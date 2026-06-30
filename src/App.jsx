@@ -107,6 +107,7 @@ const ALERT = {
   expired:    { label:"VENCIDO",           color:"#FF3B5C", bg:"#2A0B14", icon:"⛔" },
   expiring:   { label:"VENCE EM BREVE",    color:"#FFAD00", bg:"#2A1E00", icon:"⏳" },
   openUrgent: { label:"USAR COM URGÊNCIA", color:"#FFAD00", bg:"#2A1E00", icon:"🔓" },
+  sixMonths:  { label:"6 MESES NO ESTOQUE",color:"#FF3B5C", bg:"#2A0B14", icon:"🗓️" },
   old:        { label:"PRIORIZAR USO",     color:"#4DAFFF", bg:"#0B2035", icon:"⏰" },
   ok:         { label:"OK",                color:"#00CFA8", bg:"transparent", icon:"✅" },
 };
@@ -131,6 +132,7 @@ const getAlert = (meat) => {
   if (dte < 0) return "expired";
   if (dte <= 15) return "expiring";
   if (meat.status==="aberto" && meat.local==="Geladeira" && dis>3) return "openUrgent";
+  if (dis >= 180) return "sixMonths";
   if (dis > 60) return "old";
   return "ok";
 };
@@ -2747,7 +2749,7 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
         .filter(m=>m.tipo===tipo&&m.utilidade==="churrasco"&&m.pesoTotal>0)
         .flatMap(m=>(m.pacotes||[])
           .filter(p=>p.status!=="consumido"&&p.pesoAtual>0)
-          .map(p=>({meatId:m.id,corte:m.corte||m.tipo,pacoteId:p.id,peso:p.pesoAtual}))
+          .map(p=>({meatId:m.id,corte:m.corte||m.tipo,pacoteId:p.id,peso:p.pesoAtual,dataEntrada:m.dataEntrada}))
         );
 
       // Limite de pacotes para o tipo inteiro (frango/suína: 1 pacote a cada 10 pessoas)
@@ -2759,15 +2761,20 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       const allCortesLimited = allPkgs.length>0 && allPkgs.every(p=>limitedCorte(p.corte));
       const tipoLimitado = tipoCap!==Infinity || allCortesLimited;
 
-      // Denver sempre priorizado primeiro, mas limitado a 1 pacote a cada 10 pessoas
-      const denverPkgs = allPkgs.filter(p=>isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
-      const otherPkgs  = allPkgs.filter(p=>!isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
+      // Denver sempre priorizado primeiro; dentro de cada grupo, pacotes mais antigos primeiro (FIFO)
+      const byOldest = (a,b) => new Date(a.dataEntrada||0) - new Date(b.dataEntrada||0);
+      const denverPkgs = allPkgs.filter(p=>isDenver(p.corte)).sort(byOldest);
+      const otherPkgs  = allPkgs.filter(p=>!isDenver(p.corte)).sort(byOldest);
       const pool = [...denverPkgs, ...otherPkgs];
+
+      // Limite de 5% acima do necessário — não seleciona pacotes que estourem além disso
+      const tetoKg = Math.round(kgPerTipo*1.05*1000)/1000;
 
       let soma=0; const selecionados=[]; const corteCounts={};
       for(const p of pool){
         if(selecionados.length>=tipoCap) break;
         if(soma>=kgPerTipo) break;
+        if(Math.round((soma+p.peso)*1000)/1000>tetoKg) continue;
         const ck = stripAcc(p.corte.toLowerCase());
         if(isDenver(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
         if(isPicanha(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
@@ -3575,7 +3582,7 @@ export default function App() {
   const alerts = active
     .map(m=>({...m,_alert:getAlert(m)}))
     .filter(m=>m._alert!=="ok")
-    .sort((a,b)=>({expired:0,expiring:1,openUrgent:2,old:3}[a._alert]-{expired:0,expiring:1,openUrgent:2,old:3}[b._alert]));
+    .sort((a,b)=>({expired:0,expiring:1,openUrgent:2,sixMonths:3,old:4}[a._alert]-{expired:0,expiring:1,openUrgent:2,sixMonths:3,old:4}[b._alert]));
 
   const selectUser = (name) => {
     setCurrentUser(name);
