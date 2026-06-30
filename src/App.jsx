@@ -2702,38 +2702,74 @@ function Saida({meats,onRegister,setTab}) {
 }
 
 // ─── CHURRASCÔMETRO ───────────────────────────────────────────────────────────
-const PERFIL_G    = {pouco:300,normal:400,muito:500};
-const DIST_PADRAO = {}; // kept for compatibility, no longer used
+const PERFIL_G = {pouco:300,normal:400,muito:500};
 
 function Churrasometro({meats, catalog}) {
   const [adultos,  setAdultos]  = useState(10);
   const [criancas, setCriancas] = useState(4);
   const [perfil,   setPerfil]   = useState("normal");
   const [longo,    setLongo]    = useState(false);
-  const [selKeys,  setSelKeys]  = useState([]);
   const [result,   setResult]   = useState(null);
 
-  const toggleKey = key => {
-    setSelKeys(p=>p.includes(key)?p.filter(x=>x!==key):[...p,key]);
-    setResult(null);
-  };
+  // Cortes com utilidade "churrasco" — busca por nome, inclui sem catálogo
+  const churrascoCortes = (() => {
+    const chMeats = meats.filter(m=>m.utilidade==="churrasco"&&m.pesoTotal>0);
+    const nomes   = new Set(chMeats.map(m=>(m.corte||m.tipo).trim().toLowerCase()));
+    const fromCat = catalog.filter(c=>nomes.has(c.nome.trim().toLowerCase()));
+    const catNomes= new Set(fromCat.map(c=>c.nome.trim().toLowerCase()));
+    const synth   = [...nomes].filter(n=>!catNomes.has(n)).map(n=>{
+      const m=chMeats.find(x=>(x.corte||x.tipo).trim().toLowerCase()===n);
+      return {id:`synth:${n}`,nome:m?.corte||m?.tipo||n,tipo:m?.tipo||"",key:n};
+    });
+    // Bovina primeiro, depois A-Z
+    return [...fromCat,...synth].sort((a,b)=>{
+      if(a.tipo==="bovina"&&b.tipo!=="bovina") return -1;
+      if(b.tipo==="bovina"&&a.tipo!=="bovina") return 1;
+      return a.nome.localeCompare(b.nome,"pt");
+    });
+  })();
 
-  // Stock disponível para um corte — busca por nome (não mais pelo key antigo)
+  // Todos selecionados por padrão
+  const [selKeys, setSelKeys] = useState(()=>churrascoCortes.map(c=>c.key));
+  const toggleKey = key => { setSelKeys(p=>p.includes(key)?p.filter(x=>x!==key):[...p,key]); setResult(null); };
+
+  // Estoque total de um corte
   const stockOf = entry => meats
     .filter(m=>(m.corte||m.tipo).trim().toLowerCase()===entry.nome.trim().toLowerCase())
-    .reduce((s,m)=>s+m.pesoTotal, 0);
+    .reduce((s,m)=>s+m.pesoTotal,0);
+
+  // Tamanho médio de pacote de um corte (para sugestão inteligente)
+  const avgPkgSize = entry => {
+    const pkgs = meats
+      .filter(m=>(m.corte||m.tipo).trim().toLowerCase()===entry.nome.trim().toLowerCase())
+      .flatMap(m=>(m.pacotes||[]).filter(p=>p.status!=="consumido").map(p=>p.pesoAtual))
+      .filter(p=>p>0);
+    if(!pkgs.length) return 0.5; // padrão 500g
+    return pkgs.reduce((s,p)=>s+p,0)/pkgs.length;
+  };
+
+  // Sugestão inteligente de compra — sempre pacotes inteiros
+  const smartBuy = (falta, entry) => {
+    if(falta<=0) return null;
+    const pkg  = avgPkgSize(entry);
+    const nPkg = Math.ceil(falta/pkg);
+    const total= Math.round(nPkg*pkg*1000)/1000;
+    return {nPkg, total, pkg};
+  };
 
   const calcular = () => {
     if(!selKeys.length) return alert("Selecione ao menos um corte.");
-    const gAdulto = PERFIL_G[perfil] * (longo?1.2:1);
-    const totalKg = (adultos*gAdulto + criancas*gAdulto*0.5)/1000;
-    const kgCorte = totalKg / selKeys.length;
+    const gAdulto = PERFIL_G[perfil]*(longo?1.2:1);
+    const totalKg = (adultos*gAdulto+criancas*gAdulto*0.5)/1000;
+    const kgCorte = totalKg/selKeys.length;
     const cortes  = selKeys.map(key=>{
-      const entry = catalog.find(c=>c.key===key||c.nome.toLowerCase()===key);
+      const entry = churrascoCortes.find(c=>c.key===key);
       const disp  = entry ? stockOf(entry) : 0;
-      return {key, entry, necessario:kgCorte, disp, falta:Math.max(0,kgCorte-disp)};
+      const falta = Math.max(0,kgCorte-disp);
+      const buy   = entry ? smartBuy(falta,entry) : null;
+      return {key,entry,necessario:kgCorte,disp,falta,buy};
     });
-    setResult({totalKg, adultos, criancas, gAdulto, cortes});
+    setResult({totalKg,adultos,criancas,gAdulto,cortes});
   };
 
   const durBtn = (label,val) => (
@@ -2746,32 +2782,13 @@ function Churrasometro({meats, catalog}) {
     </button>
   );
 
-  // Cortes com utilidade "churrasco" no estoque — busca por nome, inclui mesmo sem catálogo
-  const churrascoCortes = (() => {
-    const churrascoMeats = meats.filter(m=>m.utilidade==="churrasco"&&m.pesoTotal>0);
-    const nomes = new Set(churrascoMeats.map(m=>(m.corte||m.tipo).trim().toLowerCase()));
-    // Tenta encontrar no catálogo pelo nome
-    const fromCatalog = catalog.filter(c=>nomes.has(c.nome.trim().toLowerCase()));
-    const catalogNomes = new Set(fromCatalog.map(c=>c.nome.trim().toLowerCase()));
-    // Itens com utilidade churrasco mas sem entrada no catálogo → cria entrada sintética
-    const synthetic = [...nomes]
-      .filter(n=>!catalogNomes.has(n))
-      .map(n=>{
-        const m = churrascoMeats.find(x=>(x.corte||x.tipo).trim().toLowerCase()===n);
-        const nome = m?.corte||m?.tipo||n;
-        return {id:`synth:${n}`, nome, tipo:m?.tipo||"", key:nome.toLowerCase()};
-      });
-    return [...fromCatalog, ...synthetic];
-  })();
-
   return (
     <div>
       <SecTitle icon="🔥" children="Churrascômetro"/>
 
-      {/* Inputs */}
       <Card style={{marginBottom:16}}>
         <div style={GRID2}>
-          <FInput label="Adultos"  type="number" min={1} value={adultos}  onFocus={e=>e.target.select()} onChange={e=>setAdultos(Math.max(1,+e.target.value))}/>
+          <FInput label="Adultos" type="number" min={1} value={adultos} onFocus={e=>e.target.select()} onChange={e=>setAdultos(Math.max(1,+e.target.value))}/>
           <FInput label="Crianças" type="number" min={0} value={criancas} onFocus={e=>e.target.select()} onChange={e=>setCriancas(Math.max(0,+e.target.value))}/>
           <FSelect label="Apetite" value={perfil} onChange={e=>setPerfil(e.target.value)}>
             <option value="pouco">Come pouco — 300g/adulto</option>
@@ -2788,24 +2805,29 @@ function Churrasometro({meats, catalog}) {
         </div>
       </Card>
 
-      {/* Seleção de cortes — só os cadastrados como churrasco */}
-      <SecTitle icon="🥩"
-        children={selKeys.length>0
-          ?`Cortes selecionados (${selKeys.length})`
-          :"Quais cortes vai servir?"}/>
+      {/* Seleção de cortes */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <SecTitle icon="🥩" children={`Cortes (${selKeys.length}/${churrascoCortes.length} selecionados)`}/>
+        <button onClick={()=>setSelKeys(selKeys.length===churrascoCortes.length?[]:churrascoCortes.map(c=>c.key))}
+          style={{fontSize:12,color:C.info,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>
+          {selKeys.length===churrascoCortes.length?"Desmarcar todos":"Marcar todos"}
+        </button>
+      </div>
 
       {churrascoCortes.length===0 ? (
         <Card style={{marginBottom:16}}>
           <div style={{color:C.muted,textAlign:"center",padding:8}}>
-            Nenhum corte cadastrado com utilidade "Churrasco". Vá em Estoque → edite a utilidade dos itens.
+            Nenhum item cadastrado com utilidade "churrasco" no estoque.
           </div>
         </Card>
       ) : (
         <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
           {churrascoCortes.map(entry=>{
-            const on     = selKeys.includes(entry.key);
-            const accent = TIPO_COLORS[entry.tipo]||C.muted;
-            const disp   = stockOf(entry);
+            const on    = selKeys.includes(entry.key);
+            const accent= TIPO_COLORS[entry.tipo]||C.muted;
+            const disp  = stockOf(entry);
+            const pkgs  = meats.filter(m=>(m.corte||m.tipo).trim().toLowerCase()===entry.nome.trim().toLowerCase())
+              .reduce((s,m)=>s+(m.pacotes||[]).filter(p=>p.status!=="consumido").length,0);
             return (
               <div key={entry.key} onClick={()=>toggleKey(entry.key)}
                 style={{background:on?accent+"1A":C.card,
@@ -2826,13 +2848,10 @@ function Churrasometro({meats, catalog}) {
                   {disp>0 ? (
                     <>
                       <div style={{fontWeight:800,color:accent,fontSize:15}}>{fmtKg(disp)}</div>
-                      <div style={{fontSize:10,color:C.success}}>em estoque</div>
+                      <div style={{fontSize:10,color:C.success}}>{pkgs} pacote{pkgs!==1?"s":""}</div>
                     </>
                   ) : (
-                    <>
-                      <div style={{fontWeight:700,color:C.dim,fontSize:13}}>sem estoque</div>
-                      <div style={{fontSize:10,color:C.muted}}>comprar tudo</div>
-                    </>
+                    <div style={{fontWeight:700,color:C.dim,fontSize:13}}>sem estoque</div>
                   )}
                 </div>
               </div>
@@ -2843,7 +2862,7 @@ function Churrasometro({meats, catalog}) {
 
       <Btn onClick={calcular} disabled={!selKeys.length}>🔥 Calcular churrasco</Btn>
 
-      {/* Results */}
+      {/* Resultado */}
       {result&&(
         <>
           <Card style={{background:"#1A1800",borderColor:"#FF6B3555",marginTop:16,marginBottom:16,textAlign:"center"}}>
@@ -2861,7 +2880,7 @@ function Churrasometro({meats, catalog}) {
           <SecTitle icon="📋" children="Por corte"/>
           {result.cortes.map(c=>{
             const accent = TIPO_COLORS[c.entry?.tipo]||C.muted;
-            const pct    = Math.min(100, c.necessario>0?(c.disp/c.necessario)*100:100);
+            const pct    = Math.min(100,c.necessario>0?(c.disp/c.necessario)*100:100);
             return (
               <Card key={c.key} style={{marginBottom:8,borderLeft:`4px solid ${accent}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -2877,8 +2896,12 @@ function Churrasometro({meats, catalog}) {
                 <div style={{display:"flex",gap:14,fontSize:13,flexWrap:"wrap",marginBottom:8}}>
                   <span>🧊 Tenho: <strong style={{color:c.disp>0?C.success:C.dim}}>{fmtKg(c.disp)}</strong></span>
                   {c.falta>0
-                    ?<span>🛒 Comprar: <strong style={{color:C.danger}}>{fmtKg(c.falta)}</strong></span>
-                    :<span style={{color:C.success,fontWeight:600}}>✓ Suficiente</span>
+                    ? <span>🛒 <strong style={{color:C.danger}}>
+                        {c.buy
+                          ? `${c.buy.nPkg} pacote${c.buy.nPkg!==1?"s":""} (~${fmtKg(c.buy.total)})`
+                          : fmtKg(c.falta)}
+                      </strong></span>
+                    : <span style={{color:C.success,fontWeight:600}}>✓ Suficiente</span>
                   }
                 </div>
                 <div style={{background:C.border,borderRadius:4,height:6,overflow:"hidden"}}>
@@ -2888,7 +2911,6 @@ function Churrasometro({meats, catalog}) {
             );
           })}
 
-          {/* Conclusão */}
           <Card style={{marginTop:8,background:"#0D1B2A",border:`1px solid ${C.border}`}}>
             <div style={{fontWeight:700,marginBottom:12,fontSize:15}}>📊 Conclusão</div>
             <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
@@ -2896,25 +2918,39 @@ function Churrasometro({meats, catalog}) {
               <strong style={{color:C.primary}}>{fmtKg(result.totalKg)}</strong>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{color:C.muted}}>🧊 Já tenho em estoque</span>
+              <span style={{color:C.muted}}>🧊 Já tenho</span>
               <strong style={{color:C.success}}>{fmtKg(result.cortes.reduce((s,c)=>s+Math.min(c.disp,c.necessario),0))}</strong>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0"}}>
               <span style={{color:C.muted}}>🛒 Preciso comprar</span>
               <strong style={{color:result.cortes.some(c=>c.falta>0)?C.warning:C.success}}>
-                {fmtKg(result.cortes.reduce((s,c)=>s+c.falta,0))}
+                {result.cortes.some(c=>c.falta>0)?fmtKg(result.cortes.reduce((s,c)=>s+c.falta,0)):"✓ Tudo ok"}
               </strong>
             </div>
           </Card>
 
           {result.cortes.some(c=>c.falta>0)&&(
             <Card style={{background:"#1A1200",borderColor:C.warning+"55",marginTop:8}}>
-              <div style={{fontWeight:700,marginBottom:10,fontSize:15}}>🛒 Lista de compras</div>
+              <div style={{fontWeight:700,marginBottom:10,fontSize:15}}>🛒 O que comprar</div>
               {result.cortes.filter(c=>c.falta>0).map(c=>(
                 <div key={c.key} style={{display:"flex",justifyContent:"space-between",
-                  padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-                  <span style={{fontWeight:600}}>{c.entry?.nome}</span>
-                  <strong style={{color:C.warning}}>{fmtKg(c.falta)}</strong>
+                  alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <div>
+                    <div style={{fontWeight:600}}>{c.entry?.nome}</div>
+                    <div style={{fontSize:11,color:C.muted,textTransform:"capitalize"}}>{c.entry?.tipo}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    {c.buy ? (
+                      <>
+                        <div style={{fontWeight:800,color:C.warning}}>
+                          {c.buy.nPkg} pacote{c.buy.nPkg!==1?"s":""}
+                        </div>
+                        <div style={{fontSize:11,color:C.muted}}>~{fmtKg(c.buy.total)}</div>
+                      </>
+                    ) : (
+                      <strong style={{color:C.warning}}>{fmtKg(c.falta)}</strong>
+                    )}
+                  </div>
                 </div>
               ))}
             </Card>
