@@ -2764,19 +2764,37 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       const otherPkgs  = allPkgs.filter(p=>!isDenver(p.corte)).sort(byOldest);
       const pool = [...denverPkgs, ...otherPkgs];
 
-      // Limite de 5% acima do necessário — não seleciona pacotes que estourem além disso
+      // Limite de 5% acima do necessário — 1ª tentativa fica dentro desse teto
       const tetoKg = Math.round(kgPerTipo*1.05*1000)/1000;
 
       let soma=0; const selecionados=[]; const corteCounts={};
-      for(const p of pool){
-        if(selecionados.length>=tipoCap) break;
-        if(soma>=kgPerTipo) break;
-        if(Math.round((soma+p.peso)*1000)/1000>tetoKg) continue;
+      const usedIds = new Set();
+      const podeUsar = p => {
         const ck = stripAcc(p.corte.toLowerCase());
-        if((corteCounts[ck]||0)>=ratio) continue; // regra universal: 1 pacote por corte a cada 10 pessoas
+        return !usedIds.has(p.pacoteId) && (corteCounts[ck]||0)<ratio && selecionados.length<tipoCap;
+      };
+      const usar = p => {
         selecionados.push(p);
+        usedIds.add(p.pacoteId);
         soma=Math.round((soma+p.peso)*1000)/1000;
+        const ck = stripAcc(p.corte.toLowerCase());
         corteCounts[ck]=(corteCounts[ck]||0)+1;
+      };
+
+      // 1ª passada — respeita o teto de 5%
+      for(const p of pool){
+        if(soma>=kgPerTipo) break;
+        if(!podeUsar(p)) continue;
+        if(Math.round((soma+p.peso)*1000)/1000>tetoKg) continue;
+        usar(p);
+      }
+
+      // 2ª passada — se ainda faltar peso e nada coube no teto, usa outros cortes mesmo
+      // estourando o limite, priorizando sempre o maior pacote disponível entre os restantes
+      while(soma<kgPerTipo){
+        const candidatos = pool.filter(podeUsar).sort((a,b)=>b.peso-a.peso);
+        if(!candidatos.length) break;
+        usar(candidatos[0]);
       }
 
       // Regra universal — nunca sugere comprar mais, a diversidade de cortes é o objetivo
@@ -2905,7 +2923,9 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
                     <div style={{fontWeight:800,fontSize:16,textTransform:"capitalize",color:accent}}>{tipo}</div>
                     {tipoLimitado&&(
                       <div style={{fontSize:10,color:C.warning,fontWeight:600,marginTop:2}}>
-                        📏 limitado a {capLimit} pacote{capLimit!==1?"s":""} por regra
+                        {capLimit===Infinity
+                          ? "📏 1 pacote por corte (sem limite total)"
+                          : `📏 limitado a ${capLimit} pacote${capLimit!==1?"s":""} no total`}
                       </div>
                     )}
                   </div>
