@@ -521,25 +521,16 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   const grupos={};
                   pacotesChurrasco.forEach(p=>{
                     if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",
-                      utilidade:p.utilidade||"—",precoKg:p.precoKg,kg:0,n:0};
+                      utilidade:p.utilidade||"—",kg:0,n:0};
                     grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
                   });
-                  const rows=Object.values(grupos)
-                    .sort((a,b)=>a.tipo.localeCompare(b.tipo,"pt","pt")||a.corte.localeCompare(b.corte,"pt"))
-                    .map(g=>`<tr>
-                    <td style="font-weight:600">${g.corte}</td>
-                    <td style="text-transform:capitalize">${g.tipo}</td>
-                    <td>${g.origem}</td>
-                    <td style="text-transform:capitalize">${g.utilidade}</td>
-                    <td>${g.n} pct</td>
-                    <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
-                  </tr>`).join("");
+                  const tipos=[...new Set(Object.values(grupos).map(g=>g.tipo))].sort((a,b)=>a.localeCompare(b,"pt"));
                   const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Churrasco</title>
                     <style>
                       body{font-family:Arial,sans-serif;padding:24px;max-width:900px;margin:0 auto;color:#222}
-                      h1{margin:0;font-size:22px;color:#e65c00}
-                      table{width:100%;border-collapse:collapse;font-size:13px}
+                      h1{margin:0;font-size:22px;color:#e65c00} h3{margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize}
+                      table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px}
                       th{text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px}
                       td{padding:5px 8px;border-bottom:1px solid #eee}
                       tfoot td{font-weight:700;background:#fff8f0;border-top:1px solid #ccc}
@@ -551,12 +542,22 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       <h1>🔥 Preparar Churrasco</h1><span style="font-size:12px;color:#666">${now}</span>
                     </div>
                     <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
-                    <table><thead><tr>
-                      <th>Corte</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th>Pacotes</th><th style="text-align:right">Peso</th>
-                    </tr></thead>
-                    <tbody>${rows}</tbody>
-                    <tfoot><tr><td colspan="5">Total</td><td style="text-align:right">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
-                    </table>
+                    ${tipos.map(tipo=>{
+                      const items=Object.values(grupos).filter(g=>g.tipo===tipo).sort((a,b)=>a.corte.localeCompare(b.corte,"pt"));
+                      const tot=items.reduce((s,g)=>s+g.kg,0);
+                      return `<h3>🥩 ${tipo}</h3>
+                      <table><thead><tr>
+                        <th>Corte</th><th>Origem</th><th>Pacotes</th><th style="text-align:right">Peso</th>
+                      </tr></thead>
+                      <tbody>${items.map(g=>`<tr>
+                        <td style="font-weight:600">${g.corte}</td>
+                        <td>${g.origem}</td>
+                        <td>${g.n} pct</td>
+                        <td style="text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+                      </tr>`).join("")}</tbody>
+                      <tfoot><tr><td colspan="3">Total ${tipo}</td><td style="text-align:right">${tot.toFixed(3).replace(".",",")} kg</td></tr></tfoot>
+                      </table>`;
+                    }).join("")}
                     <script>window.onload=()=>window.print()<\/script>
                   </body></html>`;
                 };
@@ -602,19 +603,13 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
               <div style={{display:"flex",gap:8}}>
                 <button onClick={()=>{
                 if(!shoppingList?.length){alert("Lista de compras vazia.");return;}
-                const rows=[...(shoppingList||[])].sort((a,b)=>a.nome.localeCompare(b.nome,"pt")).map(i=>`<tr>
-                  <td style="font-weight:600">☐  ${i.nome}</td>
-                  <td style="text-transform:capitalize;color:#555">${i.tipo||"—"}</td>
-                  <td style="color:#555">${i.origem||"—"}</td>
-                  <td style="text-transform:capitalize;color:#555">${i.utilidade||"—"}</td>
-                  <td style="text-align:right;color:#555">${i.precoKg?`R$ ${Number(i.precoKg).toFixed(2).replace(".",",")}`:"-"}</td>
-                </tr>`).join("");
                 const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                const tipos=[...new Set((shoppingList||[]).map(i=>i.tipo||"—"))].sort((a,b)=>a.localeCompare(b,"pt"));
                 const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Lista de Compras</title>
                   <style>
                     body{font-family:Arial,sans-serif;padding:24px;max-width:700px;margin:0 auto;color:#222}
-                    h1{margin:0;font-size:22px;color:#2e7d32}
-                    table{width:100%;border-collapse:collapse;font-size:14px}
+                    h1{margin:0;font-size:22px;color:#2e7d32} h3{margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize}
+                    table{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:4px}
                     th{text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px}
                     td{padding:7px 8px;border-bottom:1px solid #eee}
                     .close-btn{position:fixed;top:16px;right:16px;background:#f44336;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}
@@ -624,8 +619,17 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
                     <h1>🛒 Lista de Compras</h1><span style="font-size:12px;color:#666">${now}</span>
                   </div>
-                  <table><thead><tr><th>Item</th><th>Tipo</th><th>Origem</th><th>Utilidade</th><th style="text-align:right">Preço/kg</th></tr></thead>
-                  <tbody>${rows}</tbody></table>
+                  ${tipos.map(tipo=>{
+                    const items=[...(shoppingList||[]).filter(i=>(i.tipo||"—")===tipo)].sort((a,b)=>a.nome.localeCompare(b.nome,"pt"));
+                    return `<h3>🥩 ${tipo}</h3>
+                    <table><thead><tr><th>Item</th><th>Origem</th><th>Utilidade</th><th style="text-align:right">Preço/kg</th></tr></thead>
+                    <tbody>${items.map(i=>`<tr>
+                      <td style="font-weight:600">☐ ${i.nome}</td>
+                      <td style="color:#555">${i.origem||"—"}</td>
+                      <td style="text-transform:capitalize;color:#555">${i.utilidade||"—"}</td>
+                      <td style="text-align:right;color:#555">${i.precoKg?`R$ ${Number(i.precoKg).toFixed(2).replace(".",",")}`:"-"}</td>
+                    </tr>`).join("")}</tbody></table>`;
+                  }).join("")}
                   <script>window.onload=()=>window.print()<\/script>
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
