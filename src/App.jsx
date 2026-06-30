@@ -2725,36 +2725,58 @@ function Churrasometro({meats}) {
     setResult(null);
   };
 
+  const stripAcc = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const isDenver  = corte => stripAcc(corte.toLowerCase()).includes("denver");
+  const isPicanha = corte => stripAcc(corte.toLowerCase()).includes("picanha");
+  const isPaoAlho = corte => {
+    const c = stripAcc(corte.toLowerCase());
+    return c.includes("pao de alho")||c.includes("pao alho");
+  };
+
   const calcular = () => {
     if(!selTipos.length) return alert("Selecione ao menos um tipo de carne.");
     const gAdulto = PERFIL_G[perfil]*(longo?1.2:1);
     const totalKg = Math.round(((adultos*gAdulto+criancas*gAdulto*0.5)/1000)*1000)/1000;
     const kgPerTipo = totalKg/selTipos.length;
+    const totalPessoas = adultos+criancas;
+    const ratio = Math.max(1, Math.ceil(totalPessoas/10));
 
     const byTipo = selTipos.map(tipo=>{
-      // Pega todos os pacotes ativos de churrasco desse tipo
       const allPkgs = meats
         .filter(m=>m.tipo===tipo&&m.utilidade==="churrasco"&&m.pesoTotal>0)
         .flatMap(m=>(m.pacotes||[])
           .filter(p=>p.status!=="consumido"&&p.pesoAtual>0)
           .map(p=>({meatId:m.id,corte:m.corte||m.tipo,pacoteId:p.id,peso:p.pesoAtual}))
-        )
-        .sort((a,b)=>b.peso-a.peso); // maiores primeiro
+        );
 
-      // Seleciona pacotes inteiros até atingir ou superar kgPerTipo
-      let soma=0; const selecionados=[];
-      for(const p of allPkgs){
-        if(soma>=kgPerTipo) break;
+      // Limite de pacotes para o tipo inteiro (frango/suína: 1 pacote a cada 10 pessoas)
+      const tipoCap = (tipo==="frango"||tipo==="suína") ? ratio : Infinity;
+      const tipoLimitado = tipoCap!==Infinity;
+
+      // Denver sempre primeiro (prioridade, sem limite de pacotes)
+      const denverPkgs = allPkgs.filter(p=>isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
+      const otherPkgs  = allPkgs.filter(p=>!isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
+      const pool = [...denverPkgs, ...otherPkgs];
+
+      let soma=0; const selecionados=[]; const corteCounts={};
+      for(const p of pool){
+        if(selecionados.length>=tipoCap) break;
+        if(!isDenver(p.corte) && soma>=kgPerTipo) break;
+        const ck = stripAcc(p.corte.toLowerCase());
+        if(isPicanha(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
+        if(isPaoAlho(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
         selecionados.push(p);
         soma=Math.round((soma+p.peso)*1000)/1000;
+        corteCounts[ck]=(corteCounts[ck]||0)+1;
       }
 
-      const falta = Math.max(0, Math.round((kgPerTipo-soma)*1000)/1000);
+      // Tipos com teto de pacotes (frango/suína) não geram sugestão de compra
+      const falta = tipoLimitado ? 0 : Math.max(0,Math.round((kgPerTipo-soma)*1000)/1000);
 
-      return {tipo, needed:kgPerTipo, selecionados, totalSugg:soma, falta};
+      return {tipo, needed:kgPerTipo, selecionados, totalSugg:soma, falta, tipoLimitado, capLimit:tipoCap};
     });
 
-    setResult({totalKg, adultos, criancas, gAdulto, byTipo});
+    setResult({totalKg, adultos, criancas, gAdulto, byTipo, ratio});
   };
 
   const durBtn = (label,val) => (
@@ -2850,11 +2872,14 @@ function Churrasometro({meats}) {
             <div style={{fontSize:12,color:C.dim,marginTop:4}}>
               {fmtKg(result.totalKg/result.byTipo.length)} por tipo · {result.byTipo.length} tipo{result.byTipo.length!==1?"s":""}
             </div>
+            <div style={{fontSize:11,color:C.dim,marginTop:2}}>
+              📏 Regras a cada 10 pessoas: {result.ratio} pacote{result.ratio!==1?"s":""} (frango, suína, picanha, pão de alho)
+            </div>
           </Card>
 
           {/* Por tipo */}
           <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>📋 Sugestão por tipo</div>
-          {result.byTipo.map(({tipo,needed,selecionados,totalSugg,falta})=>{
+          {result.byTipo.map(({tipo,needed,selecionados,totalSugg,falta,tipoLimitado,capLimit})=>{
             const accent = TIPO_COLORS[tipo]||C.muted;
             const ok = falta===0;
             // Agrupa por corte
@@ -2866,7 +2891,14 @@ function Churrasometro({meats}) {
             return (
               <Card key={tipo} style={{marginBottom:10,borderLeft:`4px solid ${accent}`}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <div style={{fontWeight:800,fontSize:16,textTransform:"capitalize",color:accent}}>{tipo}</div>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:16,textTransform:"capitalize",color:accent}}>{tipo}</div>
+                    {tipoLimitado&&(
+                      <div style={{fontSize:10,color:C.warning,fontWeight:600,marginTop:2}}>
+                        📏 limitado a {capLimit} pacote{capLimit!==1?"s":""} por regra
+                      </div>
+                    )}
+                  </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:11,color:C.muted}}>necessário</div>
                     <div style={{fontWeight:700,color:C.text}}>{fmtKg(needed)}</div>
@@ -2875,20 +2907,30 @@ function Churrasometro({meats}) {
 
                 {selecionados.length>0 ? (
                   <>
-                    {Object.values(porCorte).map(({corte,pkgs})=>(
-                      <div key={corte} style={{display:"flex",justifyContent:"space-between",
-                        alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}44`}}>
-                        <div>
-                          <span style={{fontWeight:600,fontSize:13}}>{corte}</span>
-                          <span style={{fontSize:11,color:C.muted,marginLeft:8}}>
-                            {pkgs.length} pacote{pkgs.length!==1?"s":""}
+                    {Object.values(porCorte).map(({corte,pkgs})=>{
+                      const denver = isDenver(corte);
+                      const picCap = isPicanha(corte);
+                      const paoCap = isPaoAlho(corte);
+                      return (
+                        <div key={corte} style={{display:"flex",justifyContent:"space-between",
+                          alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}44`}}>
+                          <div>
+                            <span style={{fontWeight:600,fontSize:13}}>
+                              {denver&&"⭐ "}{corte}
+                            </span>
+                            <span style={{fontSize:11,color:C.muted,marginLeft:8}}>
+                              {pkgs.length} pacote{pkgs.length!==1?"s":""}
+                            </span>
+                            {(picCap||paoCap)&&(
+                              <span style={{fontSize:10,color:C.warning,marginLeft:6}}>📏 limitado</span>
+                            )}
+                          </div>
+                          <span style={{fontWeight:700,color:accent,fontSize:13}}>
+                            {fmtKg(Math.round(pkgs.reduce((s,p)=>s+p,0)*1000)/1000)}
                           </span>
                         </div>
-                        <span style={{fontWeight:700,color:accent,fontSize:13}}>
-                          {fmtKg(Math.round(pkgs.reduce((s,p)=>s+p,0)*1000)/1000)}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <div style={{display:"flex",justifyContent:"space-between",
                       alignItems:"center",marginTop:8,paddingTop:6,
                       borderTop:`1px solid ${C.border}`}}>
@@ -2906,7 +2948,7 @@ function Churrasometro({meats}) {
                   <div style={{color:C.muted,fontSize:13,padding:"4px 0"}}>Sem pacotes em estoque</div>
                 )}
 
-                {falta>0&&(
+                {falta>0&&!tipoLimitado&&(
                   <div style={{background:C.danger+"15",border:`1px solid ${C.danger}44`,
                     borderRadius:8,padding:"8px 10px",marginTop:8,fontSize:13}}>
                     🛒 <strong style={{color:C.danger}}>Comprar:</strong>
