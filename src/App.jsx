@@ -2753,7 +2753,7 @@ function Churrasometro({meats}) {
       const tipoCap = (tipo==="frango"||tipo==="suína") ? ratio : Infinity;
       const tipoLimitado = tipoCap!==Infinity;
 
-      // Denver sempre primeiro (prioridade, sem limite de pacotes)
+      // Denver sempre priorizado primeiro, mas limitado a 1 pacote a cada 10 pessoas
       const denverPkgs = allPkgs.filter(p=>isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
       const otherPkgs  = allPkgs.filter(p=>!isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
       const pool = [...denverPkgs, ...otherPkgs];
@@ -2761,8 +2761,9 @@ function Churrasometro({meats}) {
       let soma=0; const selecionados=[]; const corteCounts={};
       for(const p of pool){
         if(selecionados.length>=tipoCap) break;
-        if(!isDenver(p.corte) && soma>=kgPerTipo) break;
+        if(soma>=kgPerTipo) break;
         const ck = stripAcc(p.corte.toLowerCase());
+        if(isDenver(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
         if(isPicanha(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
         if(isPaoAlho(p.corte) && (corteCounts[ck]||0)>=ratio) continue;
         selecionados.push(p);
@@ -2873,7 +2874,7 @@ function Churrasometro({meats}) {
               {fmtKg(result.totalKg/result.byTipo.length)} por tipo · {result.byTipo.length} tipo{result.byTipo.length!==1?"s":""}
             </div>
             <div style={{fontSize:11,color:C.dim,marginTop:2}}>
-              📏 Regras a cada 10 pessoas: {result.ratio} pacote{result.ratio!==1?"s":""} (frango, suína, picanha, pão de alho)
+              📏 Regras a cada 10 pessoas: {result.ratio} pacote{result.ratio!==1?"s":""} (Denver, frango, suína, picanha, pão de alho)
             </div>
           </Card>
 
@@ -2921,7 +2922,7 @@ function Churrasometro({meats}) {
                             <span style={{fontSize:11,color:C.muted,marginLeft:8}}>
                               {pkgs.length} pacote{pkgs.length!==1?"s":""}
                             </span>
-                            {(picCap||paoCap)&&(
+                            {(denver||picCap||paoCap)&&(
                               <span style={{fontSize:10,color:C.warning,marginLeft:6}}>📏 limitado</span>
                             )}
                           </div>
