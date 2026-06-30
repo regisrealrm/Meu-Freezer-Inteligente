@@ -2704,13 +2704,14 @@ function Saida({meats,onRegister,setTab}) {
 // ─── CHURRASCÔMETRO ───────────────────────────────────────────────────────────
 const PERFIL_G = {pouco:300,normal:400,muito:500};
 
-function Churrasometro({meats}) {
+function Churrasometro({meats, onSendToChurrasco, setTab}) {
   const [adultos,   setAdultos]   = useState(10);
   const [criancas,  setCriancas]  = useState(4);
   const [perfil,    setPerfil]    = useState("normal");
   const [longo,     setLongo]     = useState(false);
   const [selTipos,  setSelTipos]  = useState([]);
   const [result,    setResult]    = useState(null);
+  const [enviados,  setEnviados]  = useState({}); // {tipo: true} após enviar pro Preparar Churrasco
 
   // Todos os tipos que têm pacotes de churrasco em estoque
   const tiposDisponiveis = (() => {
@@ -2751,7 +2752,12 @@ function Churrasometro({meats}) {
 
       // Limite de pacotes para o tipo inteiro (frango/suína: 1 pacote a cada 10 pessoas)
       const tipoCap = (tipo==="frango"||tipo==="suína") ? ratio : Infinity;
-      const tipoLimitado = tipoCap!==Infinity;
+
+      // Se TODOS os cortes disponíveis desse tipo são itens com regra (denver/picanha/pão de alho),
+      // o tipo inteiro é considerado limitado — não faz sentido sugerir comprar mais
+      const limitedCorte = corte => isDenver(corte)||isPicanha(corte)||isPaoAlho(corte);
+      const allCortesLimited = allPkgs.length>0 && allPkgs.every(p=>limitedCorte(p.corte));
+      const tipoLimitado = tipoCap!==Infinity || allCortesLimited;
 
       // Denver sempre priorizado primeiro, mas limitado a 1 pacote a cada 10 pessoas
       const denverPkgs = allPkgs.filter(p=>isDenver(p.corte)).sort((a,b)=>b.peso-a.peso);
@@ -2771,13 +2777,14 @@ function Churrasometro({meats}) {
         corteCounts[ck]=(corteCounts[ck]||0)+1;
       }
 
-      // Tipos com teto de pacotes (frango/suína) não geram sugestão de compra
+      // Tipos/cortes limitados por regra nunca sugerem comprar mais
       const falta = tipoLimitado ? 0 : Math.max(0,Math.round((kgPerTipo-soma)*1000)/1000);
 
       return {tipo, needed:kgPerTipo, selecionados, totalSugg:soma, falta, tipoLimitado, capLimit:tipoCap};
     });
 
     setResult({totalKg, adultos, criancas, gAdulto, byTipo, ratio});
+    setEnviados({});
   };
 
   const durBtn = (label,val) => (
@@ -2958,6 +2965,20 @@ function Churrasometro({meats}) {
                     </span>
                   </div>
                 )}
+
+                {selecionados.length>0&&(
+                  <button onClick={()=>{
+                    onSendToChurrasco(selecionados.map(p=>({meatId:p.meatId,pacoteId:p.pacoteId})));
+                    setEnviados(prev=>({...prev,[tipo]:true}));
+                  }}
+                    disabled={enviados[tipo]}
+                    style={{width:"100%",marginTop:10,background:enviados[tipo]?C.success+"22":C.primary,
+                      border:enviados[tipo]?`1px solid ${C.success}55`:"none",
+                      borderRadius:10,padding:"10px",cursor:enviados[tipo]?"default":"pointer",
+                      color:enviados[tipo]?C.success:"#fff",fontSize:13,fontWeight:700}}>
+                    {enviados[tipo]?"✅ Enviado para Preparar Churrasco":"🔥 Enviar para Preparar Churrasco"}
+                  </button>
+                )}
               </Card>
             );
           })}
@@ -2985,6 +3006,17 @@ function Churrasometro({meats}) {
               </div>
             )}
           </Card>
+
+          <button onClick={()=>{
+            const todos = result.byTipo.flatMap(t=>t.selecionados.map(p=>({meatId:p.meatId,pacoteId:p.pacoteId})));
+            if(!todos.length){alert("Nenhum pacote sugerido para enviar.");return;}
+            onSendToChurrasco(todos);
+            setTab?.("dashboard");
+          }} style={{width:"100%",marginTop:12,background:C.primary,border:"none",
+            borderRadius:12,padding:"14px",cursor:"pointer",color:"#fff",
+            fontSize:15,fontWeight:800}}>
+            🔥 Enviar tudo para Preparar Churrasco
+          </button>
         </>
       )}
     </div>
@@ -3675,6 +3707,17 @@ export default function App() {
     }));
   };
 
+  // Marca uma lista de pacotes {meatId,pacoteId} como churrasco=true (usado pelo Churrascômetro)
+  const markPacotesParaChurrasco = (list) => {
+    if(!list?.length) return;
+    setMeats(prev=>prev.map(m=>{
+      const matches = list.filter(p=>p.meatId===m.id);
+      if(!matches.length) return m;
+      const ids = new Set(matches.map(x=>x.pacoteId));
+      return {...m, pacotes:(m.pacotes||[]).map(p=>ids.has(p.id)?{...p,churrasco:true}:p)};
+    }));
+  };
+
   // ── Cancela só os pacotes de um grupo (churrasco ou refeição) ──────────────
   const cancelGrupo = (utilidade) => {
     setMeats(prev=>prev.map(m=>{
@@ -3957,7 +4000,7 @@ export default function App() {
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onCompreiItem={onCompreiItem} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig} prefill={entradaPrefill} onClearPrefill={()=>setEntradaPrefill(null)}/>}
-        {tab==="churras"    &&<Churrasometro meats={active}/>}
+        {tab==="churras"    &&<Churrasometro meats={active} onSendToChurrasco={markPacotesParaChurrasco} setTab={setTab}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
         {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>withPassword(()=>{setExits([]);setMeats(p=>p.filter(m=>m.pesoTotal>0));})}/>}
       </div>
