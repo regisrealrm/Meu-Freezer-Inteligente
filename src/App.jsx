@@ -3484,23 +3484,23 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [changingUser,setChangingUser]= useState(false);
 
-  const lastSaved = useRef("");
+  const lastSaved      = useRef("");
+  const isRemoteUpdate = useRef(false);
 
-  // ── LOAD: localStorage primeiro (instantâneo), Firebase depois (sync) ─────
+  // ── LOAD: localStorage primeiro (instantâneo) + Firebase real-time ─────────
   useEffect(()=>{
     try {
       const savedUser = localStorage.getItem("mfi3_user");
       if(savedUser && USERS.includes(savedUser)) setCurrentUser(savedUser);
 
-      // Carrega localStorage imediatamente
       const local = localStorage.getItem("mfi_local_data");
       if(local) {
         const d = JSON.parse(local);
         if(d.meats?.length||d.exits?.length||d.catalog?.length) {
-          setMeats(d.meats         || []);
-          setExits(d.exits         || []);
-          setCatalog(d.catalog     || []);
-          setShoppingList(d.shoppingList || []);
+          setMeats(d.meats              || []);
+          setExits(d.exits              || []);
+          setCatalog(d.catalog          || []);
+          setShoppingList(d.shoppingList|| []);
           if(d.appConfig) setAppConfig(d.appConfig);
           lastSaved.current = local;
         }
@@ -3509,55 +3509,49 @@ export default function App() {
     setLoaded(true);
     setStorageOk(true);
 
-    // Firebase: sincroniza em background (se disponível)
+    // Firebase: listener em tempo real — atualiza quando outro usuário salva
     try {
       const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
         const data = snapshot.val();
-        if(data) {
-          const hash = JSON.stringify(data);
-          const localRaw = localStorage.getItem("mfi_local_data");
-          if(!localRaw || hash !== lastSaved.current) {
-            lastSaved.current = hash;
-            setMeats(data.meats         || []);
-            setExits(data.exits         || []);
-            setCatalog(data.catalog     || []);
-            setShoppingList(data.shoppingList || []);
-            if(data.appConfig) setAppConfig(data.appConfig);
-          }
+        if(!data) return;
+        const remoteTs = data._ts || 0;
+        const localTs  = (() => {
+          try { return JSON.parse(localStorage.getItem("mfi_local_data")||"{}")._ts||0; }
+          catch { return 0; }
+        })();
+        if(remoteTs > localTs) {
+          isRemoteUpdate.current = true;
+          setMeats(data.meats              || []);
+          setExits(data.exits              || []);
+          setCatalog(data.catalog          || []);
+          setShoppingList(data.shoppingList|| []);
+          if(data.appConfig) setAppConfig(data.appConfig);
+          const raw = JSON.stringify(data);
+          try { localStorage.setItem("mfi_local_data", raw); } catch(e){}
+          lastSaved.current = raw;
         }
       }, ()=>{});
       return ()=>unsubscribe();
     } catch(e){}
   },[]);
 
-  // ── SAVE: localStorage (sempre) + Firebase (quando disponível) ────────────
+  // ── SAVE: localStorage + Firebase SDK (set) ───────────────────────────────
   useEffect(()=>{
     if(!loaded) return;
-    const currentHash = JSON.stringify({meats, exits, catalog, appConfig, shoppingList});
+    if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
+
+    const data = {meats, exits, catalog, appConfig, shoppingList, _ts: Date.now()};
+    const currentHash = JSON.stringify(data);
     if(currentHash === lastSaved.current) return;
 
     lastSaved.current = currentHash;
     setSaveStatus("saving");
-
-    try {
-      localStorage.setItem("mfi_local_data", currentHash);
-      setSaveStatus("saved");
-    } catch(e){}
+    try { localStorage.setItem("mfi_local_data", currentHash); setSaveStatus("saved"); } catch(e){}
 
     const t = setTimeout(async ()=>{
-      const ctrl    = new AbortController();
-      const timeout = setTimeout(()=>ctrl.abort(), 8000);
       try {
-        const res = await fetch(FIREBASE_REST, {
-          method:"PUT",
-          headers:{"Content-Type":"application/json"},
-          body: currentHash,
-          signal: ctrl.signal,
-        });
-        clearTimeout(timeout);
-        if(!res.ok) console.warn("Firebase sync error:", res.status);
+        await set(dbRef(db, DB_PATH), data);
       } catch(e){
-        clearTimeout(timeout);
         console.warn("Firebase offline, usando localStorage:", e.message);
       }
     }, 1000);
