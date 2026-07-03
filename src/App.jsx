@@ -3519,7 +3519,9 @@ export default function App() {
           try { return JSON.parse(localStorage.getItem("mfi_local_data")||"{}")._ts||0; }
           catch { return 0; }
         })();
-        if(remoteTs > localTs) {
+        // Só atualiza se Firebase tem dados mais recentes E dados válidos (não vazio)
+        const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
+        if(remoteTs > localTs && temDados) {
           isRemoteUpdate.current = true;
           setMeats(data.meats              || []);
           setExits(data.exits              || []);
@@ -3540,39 +3542,55 @@ export default function App() {
     if(!loaded) return;
     if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
 
-    const data = {meats, exits, catalog, appConfig, shoppingList, _ts: Date.now()};
-    const currentHash = JSON.stringify(data);
-    if(currentHash === lastSaved.current) return;
+    // Compara SÓ os dados reais (sem _ts) para evitar re-saves a cada milissegundo
+    const dataHash = JSON.stringify({meats, exits, catalog, appConfig, shoppingList});
+    if(dataHash === lastSaved.current) return;
+    lastSaved.current = dataHash;
 
-    lastSaved.current = currentHash;
     setSaveStatus("saving");
-    try { localStorage.setItem("mfi_local_data", currentHash); setSaveStatus("saved"); } catch(e){}
+    const ts = Date.now();
+    const dataToSave = {meats, exits, catalog, appConfig, shoppingList, _ts: ts};
+    const withTs = JSON.stringify(dataToSave);
+    try { localStorage.setItem("mfi_local_data", withTs); setSaveStatus("saved"); } catch(e){}
 
     const t = setTimeout(async ()=>{
-      try {
-        await set(dbRef(db, DB_PATH), data);
-      } catch(e){
-        console.warn("Firebase offline, usando localStorage:", e.message);
-      }
+      try { await set(dbRef(db, DB_PATH), dataToSave); }
+      catch(e){ console.warn("Firebase offline:", e.message); }
     }, 1000);
     return ()=>clearTimeout(t);
   },[meats, exits, catalog, appConfig, shoppingList, loaded]);
 
   // ── EXPORT / IMPORT ───────────────────────────────────────────────────────
   const exportData = () => {
-    const json = JSON.stringify({meats,exits,catalog}, null, 2);
+    const json = JSON.stringify({meats,exits,catalog,shoppingList,appConfig}, null, 2);
     setImportTxt(json);
     setImportMsg("");
     setShowBackup(true);
+  };
+
+  const downloadBackup = () => {
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}h${String(now.getMinutes()).padStart(2,"0")}`;
+    const json = JSON.stringify({meats,exits,catalog,shoppingList,appConfig,_backup:stamp}, null, 2);
+    const blob = new Blob([json], {type:"application/json"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `freezer-backup-${stamp}.json`;
+    a.click(); URL.revokeObjectURL(url);
+    localStorage.setItem("mfi_last_backup", now.toISOString());
+    setImportMsg(`✅ Arquivo baixado: freezer-backup-${stamp}.json`);
   };
 
   const importData = () => {
     try {
       const d = JSON.parse(importTxt);
       if(!Array.isArray(d.meats)) throw new Error("Formato inválido");
-      setMeats(d.meats || []);
-      setExits(d.exits || []);
-      setCatalog(d.catalog || []);
+      if(!window.confirm(`Restaurar backup com ${d.meats.length} itens no estoque e ${(d.exits||[]).length} saídas?\n\nOs dados atuais serão substituídos.`)) return;
+      setMeats(d.meats              || []);
+      setExits(d.exits              || []);
+      setCatalog(d.catalog          || []);
+      setShoppingList(d.shoppingList|| []);
+      if(d.appConfig) setAppConfig(d.appConfig);
       setImportMsg("✅ Dados restaurados com sucesso!");
       setShowBackup(false);
     } catch(e) {
@@ -4023,36 +4041,66 @@ export default function App() {
           display:"flex",alignItems:"flex-end",justifyContent:"center"}}
           onClick={()=>setShowBackup(false)}>
           <div style={{background:C.card,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:900,
-            padding:"20px 20px 36px",maxHeight:"80vh",overflowY:"auto"}}
+            padding:"20px 20px 36px",maxHeight:"90vh",overflowY:"auto"}}
             onClick={e=>e.stopPropagation()}>
-            <div style={{fontWeight:800,fontSize:17,marginBottom:4}}>💾 Backup de dados</div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:14}}>
-              Copie o texto abaixo e guarde em um bloco de notas, e-mail ou qualquer lugar seguro.
-              Para restaurar depois, cole o texto e clique em Restaurar.
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontWeight:800,fontSize:17}}>💾 Backup de dados</div>
+              <button onClick={()=>setShowBackup(false)}
+                style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:8,
+                  padding:"6px 12px",cursor:"pointer",fontSize:13,color:C.muted,fontWeight:700}}>✕</button>
+            </div>
+
+            {/* Resumo do que será salvo */}
+            <div style={{background:C.success+"15",border:`1px solid ${C.success}44`,
+              borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+              <div style={{fontWeight:700,fontSize:13,color:C.success,marginBottom:8}}>🔒 Dados protegidos</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {[
+                  {icon:"🧊",label:"Itens no estoque",val:meats.filter(m=>m.pesoTotal>0).length},
+                  {icon:"📋",label:"Saídas registradas",val:exits.length},
+                  {icon:"🛒",label:"Lista de compras",val:shoppingList.length},
+                  {icon:"🔪",label:"Cortes no catálogo",val:catalog.length},
+                ].map(({icon,label,val})=>(
+                  <div key={label} style={{fontSize:12,color:C.muted}}>
+                    {icon} <strong style={{color:C.text}}>{val}</strong> {label}
+                  </div>
+                ))}
+              </div>
+              {(()=>{
+                const last = localStorage.getItem("mfi_last_backup");
+                if(!last) return <div style={{fontSize:11,color:C.warning,marginTop:8}}>⚠️ Nenhum backup manual feito ainda</div>;
+                const d = new Date(last);
+                const fmt = d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                return <div style={{fontSize:11,color:C.success,marginTop:8}}>✅ Último backup: {fmt}</div>;
+              })()}
+            </div>
+
+            {/* Botão de download */}
+            <button onClick={downloadBackup}
+              style={{width:"100%",background:C.success,border:"none",borderRadius:12,
+                padding:"14px",cursor:"pointer",color:"#fff",fontSize:15,fontWeight:800,marginBottom:10}}>
+              📥 Baixar arquivo de backup (.json)
+            </button>
+
+            {/* Restaurar */}
+            <div style={{fontSize:12,color:C.muted,marginBottom:8,marginTop:4}}>
+              Para restaurar: cole o conteúdo do arquivo abaixo e clique em Restaurar.
             </div>
             <textarea value={importTxt} onChange={e=>setImportTxt(e.target.value)}
-              rows={8}
+              placeholder="Cole aqui o conteúdo do arquivo de backup..."
+              rows={5}
               style={{width:"100%",background:"#0A1520",color:C.text,
                 border:`1px solid ${C.border}`,borderRadius:8,padding:12,
-                fontSize:11,fontFamily:"monospace",resize:"vertical",outline:"none"}}/>
+                fontSize:11,fontFamily:"monospace",resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
             {importMsg&&(
               <div style={{marginTop:8,fontSize:13,
                 color:importMsg.startsWith("✅")?C.success:C.danger}}>
                 {importMsg}
               </div>
             )}
-            <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
-              <Btn onClick={()=>{
-                try {
-                  if(navigator?.clipboard?.writeText) {
-                    navigator.clipboard.writeText(importTxt);
-                    setImportMsg("✅ Copiado! Cole em um bloco de notas para guardar.");
-                  } else {
-                    setImportMsg("Selecione todo o texto acima e copie manualmente (Ctrl+A → Ctrl+C).");
-                  }
-                } catch(e){ setImportMsg("Selecione o texto acima e copie manualmente."); }
-              }}>📋 Copiar backup</Btn>
-              <Btn onClick={importData} color={C.success}>🔄 Restaurar</Btn>
+            <div style={{display:"flex",gap:8,marginTop:12}}>
+              <Btn onClick={importData} color={C.warning} style={{flex:1}}>🔄 Restaurar backup</Btn>
               <Btn onClick={()=>setShowBackup(false)} color={C.dim}>Fechar</Btn>
             </div>
           </div>
