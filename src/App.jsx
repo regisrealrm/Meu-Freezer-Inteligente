@@ -3502,24 +3502,28 @@ export default function App() {
           setCatalog(d.catalog          || []);
           setShoppingList(d.shoppingList|| []);
           if(d.appConfig) setAppConfig(d.appConfig);
-          lastSaved.current = local;
+          // lastSaved guarda SEMPRE só os dados reais (sem _ts) para comparação estável
+          const {_ts:_, ...rest} = JSON.parse(local);
+          lastSaved.current = JSON.stringify(rest);
         }
       }
     } catch(e){}
     setLoaded(true);
     setStorageOk(true);
 
-    // Firebase: listener em tempo real — atualiza quando outro usuário salva
+    // Firebase: listener em tempo real
     try {
       const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
         const data = snapshot.val();
         if(!data) return;
+
         const remoteTs = data._ts || 0;
         const localTs  = (() => {
           try { return JSON.parse(localStorage.getItem("mfi_local_data")||"{}")._ts||0; }
           catch { return 0; }
         })();
-        // Só atualiza se Firebase tem dados mais recentes E dados válidos (não vazio)
+
+        // Proteção dupla: só aceita dado do Firebase se for mais recente E não vazio
         const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
         if(remoteTs > localTs && temDados) {
           isRemoteUpdate.current = true;
@@ -3528,21 +3532,27 @@ export default function App() {
           setCatalog(data.catalog          || []);
           setShoppingList(data.shoppingList|| []);
           if(data.appConfig) setAppConfig(data.appConfig);
-          const raw = JSON.stringify(data);
-          try { localStorage.setItem("mfi_local_data", raw); } catch(e){}
-          lastSaved.current = raw;
+          // Atualiza localStorage e hash de comparação (sem _ts)
+          const withTs = JSON.stringify(data);
+          try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
+          const {_ts:__, ...rest} = data;
+          lastSaved.current = JSON.stringify(rest);
         }
       }, ()=>{});
       return ()=>unsubscribe();
     } catch(e){}
   },[]);
 
-  // ── SAVE: localStorage + Firebase SDK (set) ───────────────────────────────
+  // ── SAVE: localStorage + Firebase SDK ────────────────────────────────────
   useEffect(()=>{
     if(!loaded) return;
     if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
 
-    // Compara SÓ os dados reais (sem _ts) para evitar re-saves a cada milissegundo
+    // Nunca salva estado vazio no Firebase — protege contra sobrescrever dados válidos
+    const hasData = meats.length>0 || exits.length>0 || catalog.length>0;
+    if(!hasData) return;
+
+    // Hash só com dados reais (sem _ts) — comparação estável
     const dataHash = JSON.stringify({meats, exits, catalog, appConfig, shoppingList});
     if(dataHash === lastSaved.current) return;
     lastSaved.current = dataHash;
@@ -3554,8 +3564,11 @@ export default function App() {
     try { localStorage.setItem("mfi_local_data", withTs); setSaveStatus("saved"); } catch(e){}
 
     const t = setTimeout(async ()=>{
-      try { await set(dbRef(db, DB_PATH), dataToSave); }
-      catch(e){ console.warn("Firebase offline:", e.message); }
+      try {
+        await set(dbRef(db, DB_PATH), dataToSave);
+      } catch(e){
+        console.warn("Firebase offline:", e.message);
+      }
     }, 1000);
     return ()=>clearTimeout(t);
   },[meats, exits, catalog, appConfig, shoppingList, loaded]);
