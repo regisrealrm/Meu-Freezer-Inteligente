@@ -3984,6 +3984,13 @@ export default function App() {
               </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              {/* Backup button */}
+              <button onClick={exportData}
+                title="Backup de dados"
+                style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:10,
+                  padding:"6px 10px",cursor:"pointer",fontSize:16}}>
+                💾
+              </button>
               {/* User pill */}
               <button onClick={()=>setChangingUser(true)}
                 style={{background:C.light,border:`1px solid ${C.border}`,borderRadius:20,
