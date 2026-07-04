@@ -3598,6 +3598,9 @@ export default function App() {
     try {
       const d = JSON.parse(importTxt);
       if(!Array.isArray(d.meats)) throw new Error("Formato inválido");
+      const pwd = window.prompt("🔒 Digite a senha para restaurar o backup:");
+      if(pwd === null) return; // cancelou
+      if(pwd !== "1404") { setImportMsg("❌ Senha incorreta."); return; }
       if(!window.confirm(`Restaurar backup com ${d.meats.length} itens no estoque e ${(d.exits||[]).length} saídas?\n\nOs dados atuais serão substituídos.`)) return;
       setMeats(d.meats              || []);
       setExits(d.exits              || []);
@@ -3914,8 +3917,9 @@ export default function App() {
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
       <div style={{width:"100%",maxWidth:360}}>
         <div style={{textAlign:"center",marginBottom:32}}>
-          <span style={{fontSize:48}}>🧊</span>
-          <div style={{fontSize:22,fontWeight:900,color:C.primary,marginTop:8}}>Meu Freezer Inteligente</div>
+          <img src="/icon-512.png" alt="Meu Freezer Inteligente"
+            style={{width:88,height:88,borderRadius:20,objectFit:"cover"}}/>
+          <div style={{fontSize:22,fontWeight:900,color:C.primary,marginTop:12}}>Meu Freezer Inteligente</div>
           <div style={{fontSize:15,color:C.muted,marginTop:8}}>
             {changingUser ? "Trocar usuário" : "Quem é você?"}
           </div>
@@ -3968,7 +3972,8 @@ export default function App() {
         <div style={{maxWidth:900,margin:"0 auto",padding:"0 16px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:12}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:26}}>🧊</span>
+              <img src="/icon-512.png" alt="Meu Freezer Inteligente"
+                style={{width:32,height:32,borderRadius:8,objectFit:"cover"}}/>
               <div>
                 <div style={{fontSize:16,fontWeight:800,color:C.primary,letterSpacing:"-0.3px"}}>Meu Freezer Inteligente</div>
                 <div style={{fontSize:10,fontWeight:600,
