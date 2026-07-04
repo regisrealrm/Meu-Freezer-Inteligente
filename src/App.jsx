@@ -142,14 +142,17 @@ const loadHtml2Canvas = () => {
 };
 
 // Renderiza um bloco HTML fora da tela e compartilha como imagem (foto) pelo menu nativo
+// Gera em resolução alta e largura padrão A4 (210mm ≈ 794px a 96dpi)
+const A4_WIDTH_PX = 794;
 const shareHtmlAsImage = async (innerHtml, filename, shareTitle) => {
   try {
     const h2c = await loadHtml2Canvas();
     const wrap = document.createElement("div");
-    wrap.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;background:#fff;";
+    wrap.style.cssText = `position:fixed;left:-9999px;top:0;width:${A4_WIDTH_PX}px;background:#fff;`;
     wrap.innerHTML = innerHtml;
     document.body.appendChild(wrap);
-    const canvas = await h2c(wrap, {backgroundColor:"#ffffff",scale:2});
+    // scale 3 para alta resolução (nitidez em qualquer tela, inclusive ao dar zoom no WhatsApp)
+    const canvas = await h2c(wrap, {backgroundColor:"#ffffff",scale:3,useCORS:true,logging:false});
     document.body.removeChild(wrap);
 
     canvas.toBlob(async (blob)=>{
@@ -167,7 +170,7 @@ const shareHtmlAsImage = async (innerHtml, filename, shareTitle) => {
         a.click(); URL.revokeObjectURL(url);
         alert("Imagem baixada! Compartilhe pelo WhatsApp manualmente.");
       }
-    }, "image/png");
+    }, "image/png", 1.0);
   } catch(e) {
     alert("Não foi possível gerar a imagem. Tente novamente.");
   }
@@ -659,15 +662,50 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                     <script>window.onload=()=>window.print()<\/script>
                   </body></html>`;
                 };
-                const openWhatsApp = () => {
+                const openWhatsApp = async () => {
                   const grupos={};
                   pacotesChurrasco.forEach(p=>{
-                    if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,kg:0};
-                    grupos[p.corte].kg+=p.pesoAtual;
+                    if(!grupos[p.corte]) grupos[p.corte]={corte:p.corte,tipo:p.tipo,origem:p.origem||"—",kg:0,n:0};
+                    grupos[p.corte].kg+=p.pesoAtual; grupos[p.corte].n++;
                   });
-                  const linhas=Object.values(grupos).map(g=>`🥩 ${g.corte} (${g.tipo}) — ${g.kg.toFixed(3).replace(".",",")} kg`).join("%0A");
-                  const txt=`🔥 *Preparar Churrasco*%0ATotal: ${totalChurrascoKg.toFixed(3).replace(".",",")} kg%0A%0A${linhas}`;
-                  window.open(`https://wa.me/?text=${txt}`,"_blank");
+                  const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                  const tiposCh=[...new Set(Object.values(grupos).map(g=>g.tipo))].sort((a,b)=>a.localeCompare(b,"pt"));
+                  const innerHtml = `
+                    <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
+                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
+                        <h1 style="margin:0;font-size:22px;color:#e65c00">🔥 Preparar Churrasco</h1>
+                        <span style="font-size:12px;color:#666">${now}</span>
+                      </div>
+                      <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
+                      ${tiposCh.map(tipo=>{
+                        const items=Object.values(grupos).filter(g=>g.tipo===tipo).sort((a,b)=>a.corte.localeCompare(b.corte,"pt"));
+                        const tot=items.reduce((s,g)=>s+g.kg,0);
+                        return `<h3 style="margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px">
+                          <thead><tr>
+                            <th style="text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px">Corte</th>
+                            <th style="text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px">Origem</th>
+                            <th style="text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px">Pacotes</th>
+                            <th style="text-align:right;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px">Peso</th>
+                          </tr></thead>
+                          <tbody>${items.map(g=>`<tr>
+                            <td style="padding:5px 8px;border-bottom:1px solid #eee;font-weight:600">${g.corte}</td>
+                            <td style="padding:5px 8px;border-bottom:1px solid #eee">${g.origem}</td>
+                            <td style="padding:5px 8px;border-bottom:1px solid #eee">${g.n} pct</td>
+                            <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:700">${g.kg.toFixed(3).replace(".",",")} kg</td>
+                          </tr>`).join("")}</tbody>
+                          <tfoot><tr>
+                            <td colspan="3" style="padding:5px 8px;font-weight:700;background:#fff8f0;border-top:1px solid #ccc">Total ${tipo}</td>
+                            <td style="padding:5px 8px;font-weight:700;background:#fff8f0;border-top:1px solid #ccc;text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
+                          </tr></tfoot>
+                        </table>`;
+                      }).join("")}
+                      <div style="margin-top:24px;padding-top:12px;border-top:2px solid #e65c00;display:flex;justify-content:space-between;align-items:center">
+                        <span style="font-size:15px;font-weight:700;color:#333">Total Geral</span>
+                        <span style="font-size:18px;font-weight:900;color:#e65c00">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</span>
+                      </div>
+                    </div>`;
+                  await shareHtmlAsImage(innerHtml, `churrasco-${now.replace(/[\/: ]/g,"-")}.png`, "Preparar Churrasco");
                 };
                 return (
                   <div style={{display:"flex",gap:8}}>
@@ -739,11 +777,40 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 padding:"12px",cursor:"pointer",color:"#fff",fontSize:14,fontWeight:700}}>
                   🖨️ PDF
                 </button>
-                <button onClick={()=>{
+                <button onClick={async ()=>{
                   if(!shoppingList?.length){alert("Lista vazia.");return;}
-                  const linhas=(shoppingList||[]).map(i=>`☐ ${i.nome}${i.tipo?" ("+i.tipo+")":""}`).join("%0A");
-                  const txt=`🛒 *Lista de Compras*%0A%0A${linhas}`;
-                  window.open(`https://wa.me/?text=${txt}`,"_blank");
+                  const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                  const tiposC=[...new Set((shoppingList||[]).map(i=>i.tipo||"—"))].sort((a,b)=>a.localeCompare(b,"pt"));
+                  const innerHtml = `
+                    <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
+                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
+                        <h1 style="margin:0;font-size:22px;color:#2e7d32">🛒 Lista de Compras</h1>
+                        <span style="font-size:12px;color:#666">${now}</span>
+                      </div>
+                      ${tiposC.map(tipo=>{
+                        const items=[...(shoppingList||[]).filter(i=>(i.tipo||"—")===tipo)].sort((a,b)=>a.nome.localeCompare(b.nome,"pt"));
+                        return `<h3 style="margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
+                        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:4px">
+                          <thead><tr>
+                            <th style="text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px">Item</th>
+                            <th style="text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px">Origem</th>
+                            <th style="text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px">Utilidade</th>
+                            <th style="text-align:right;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px">Preço/kg</th>
+                          </tr></thead>
+                          <tbody>${items.map(i=>`<tr>
+                            <td style="padding:7px 8px;border-bottom:1px solid #eee;font-weight:600">☐ ${i.nome}</td>
+                            <td style="padding:7px 8px;border-bottom:1px solid #eee;color:#555">${i.origem||"—"}</td>
+                            <td style="padding:7px 8px;border-bottom:1px solid #eee;text-transform:capitalize;color:#555">${i.utilidade||"—"}</td>
+                            <td style="padding:7px 8px;border-bottom:1px solid #eee;text-align:right;color:#555">${i.precoKg?`R$ ${Number(i.precoKg).toFixed(2).replace(".",",")}`:"-"}</td>
+                          </tr>`).join("")}</tbody>
+                        </table>`;
+                      }).join("")}
+                      <div style="margin-top:24px;padding-top:12px;border-top:2px solid #2e7d32;display:flex;justify-content:space-between;align-items:center">
+                        <span style="font-size:15px;font-weight:700;color:#333">Total de itens</span>
+                        <span style="font-size:18px;font-weight:900;color:#2e7d32">${(shoppingList||[]).length} item${(shoppingList||[]).length!==1?"ns":""}</span>
+                      </div>
+                    </div>`;
+                  await shareHtmlAsImage(innerHtml, `compras-${now.replace(/[\/: ]/g,"-")}.png`, "Lista de Compras");
                 }} style={{flex:1,background:"#25D366",border:"none",borderRadius:10,
                   padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
                   <WaLogo/> WhatsApp
