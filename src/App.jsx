@@ -126,7 +126,7 @@ const WaLogo    = () => (
   </svg>
 );
 
-// Carrega html2canvas via CDN sob demanda (uma única vez)
+// Carrega html2canvas e jsPDF via CDN sob demanda (uma única vez)
 let _h2cPromise = null;
 const loadHtml2Canvas = () => {
   if(window.html2canvas) return Promise.resolve(window.html2canvas);
@@ -141,38 +141,67 @@ const loadHtml2Canvas = () => {
   return _h2cPromise;
 };
 
-// Renderiza um bloco HTML fora da tela e compartilha como imagem (foto) pelo menu nativo
-// Gera em resolução alta e largura padrão A4 (210mm ≈ 794px a 96dpi)
-const A4_WIDTH_PX = 794;
-const shareHtmlAsImage = async (innerHtml, filename, shareTitle) => {
+let _jspdfPromise = null;
+const loadJsPDF = () => {
+  if(window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if(_jspdfPromise) return _jspdfPromise;
+  _jspdfPromise = new Promise((resolve,reject)=>{
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    s.onload = ()=>resolve(window.jspdf.jsPDF);
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return _jspdfPromise;
+};
+
+// Renderiza um bloco HTML fora da tela, gera um PDF real em A4 (multi-página se preciso)
+// e compartilha pelo menu nativo do celular (WhatsApp aparece como opção de documento)
+const A4_WIDTH_PX = 794; // 210mm a 96dpi
+const shareHtmlAsPDF = async (innerHtml, filename, shareTitle) => {
   try {
-    const h2c = await loadHtml2Canvas();
+    const [h2c, jsPDF] = await Promise.all([loadHtml2Canvas(), loadJsPDF()]);
     const wrap = document.createElement("div");
     wrap.style.cssText = `position:fixed;left:-9999px;top:0;width:${A4_WIDTH_PX}px;background:#fff;`;
     wrap.innerHTML = innerHtml;
     document.body.appendChild(wrap);
-    // scale 3 para alta resolução (nitidez em qualquer tela, inclusive ao dar zoom no WhatsApp)
-    const canvas = await h2c(wrap, {backgroundColor:"#ffffff",scale:3,useCORS:true,logging:false});
+    // scale 2 já garante boa nitidez em PDF sem deixar o arquivo gigante
+    const canvas = await h2c(wrap, {backgroundColor:"#ffffff",scale:2,useCORS:true,logging:false});
     document.body.removeChild(wrap);
 
-    canvas.toBlob(async (blob)=>{
-      if(!blob) { alert("Não foi possível gerar a imagem."); return; }
-      const file = new File([blob], filename, {type:"image/png"});
-      if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
-        try {
-          await navigator.share({files:[file], title:shareTitle});
-        } catch(e){ /* usuário cancelou o compartilhamento */ }
-      } else {
-        // Fallback: baixa a imagem para compartilhar manualmente
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = filename;
-        a.click(); URL.revokeObjectURL(url);
-        alert("Imagem baixada! Compartilhe pelo WhatsApp manualmente.");
-      }
-    }, "image/png", 1.0);
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const pdf = new jsPDF("p","mm","a4");
+    const pdfWidth  = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth  = pdfWidth;
+    const imgHeight = (canvas.height*imgWidth)/canvas.width;
+
+    let heightLeft = imgHeight;
+    let position   = 0;
+    pdf.addImage(imgData,"JPEG",0,position,imgWidth,imgHeight);
+    heightLeft -= pdfHeight;
+    while(heightLeft > 0){
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData,"JPEG",0,position,imgWidth,imgHeight);
+      heightLeft -= pdfHeight;
+    }
+
+    const pdfBlob = pdf.output("blob");
+    const file = new File([pdfBlob], filename, {type:"application/pdf"});
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+      try {
+        await navigator.share({files:[file], title:shareTitle});
+      } catch(e){ /* usuário cancelou o compartilhamento */ }
+    } else {
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      a.click(); URL.revokeObjectURL(url);
+      alert("PDF baixado! Compartilhe pelo WhatsApp manualmente.");
+    }
   } catch(e) {
-    alert("Não foi possível gerar a imagem. Tente novamente.");
+    alert("Não foi possível gerar o PDF. Tente novamente.");
   }
 };
 
@@ -583,7 +612,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                       <span style="font-size:18px;font-weight:900;color:#1565c0">${total.toFixed(3).replace(".",",")} kg</span>
                     </div>
                   </div>`;
-                await shareHtmlAsImage(innerHtml, `estoque-${now.replace(/[\/: ]/g,"-")}.png`, "Estoque Atual");
+                await shareHtmlAsPDF(innerHtml, `estoque-${now.replace(/[\/: ]/g,"-")}.pdf`, "Estoque Atual");
               };
               return (
                 <div style={{display:"flex",gap:8,marginTop:showPfFilters?0:12}}>
@@ -705,7 +734,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         <span style="font-size:18px;font-weight:900;color:#e65c00">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</span>
                       </div>
                     </div>`;
-                  await shareHtmlAsImage(innerHtml, `churrasco-${now.replace(/[\/: ]/g,"-")}.png`, "Preparar Churrasco");
+                  await shareHtmlAsPDF(innerHtml, `churrasco-${now.replace(/[\/: ]/g,"-")}.pdf`, "Preparar Churrasco");
                 };
                 return (
                   <div style={{display:"flex",gap:8}}>
@@ -810,7 +839,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                         <span style="font-size:18px;font-weight:900;color:#2e7d32">${(shoppingList||[]).length} item${(shoppingList||[]).length!==1?"ns":""}</span>
                       </div>
                     </div>`;
-                  await shareHtmlAsImage(innerHtml, `compras-${now.replace(/[\/: ]/g,"-")}.png`, "Lista de Compras");
+                  await shareHtmlAsPDF(innerHtml, `compras-${now.replace(/[\/: ]/g,"-")}.pdf`, "Lista de Compras");
                 }} style={{flex:1,background:"#25D366",border:"none",borderRadius:10,
                   padding:"12px",cursor:"pointer",color:"#fff",fontSize:13,fontWeight:700}}>
                   <WaLogo/> WhatsApp
