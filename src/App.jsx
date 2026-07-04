@@ -158,6 +158,8 @@ const loadJsPDF = () => {
 // Renderiza um bloco HTML fora da tela, gera um PDF real em A4 (multi-página se preciso)
 // e compartilha pelo menu nativo do celular (WhatsApp aparece como opção de documento)
 const A4_WIDTH_PX = 794; // 210mm a 96dpi
+// Gera PDF A4 quebrando SÓ entre blocos (.pdf-block) — nunca no meio de uma linha.
+// O innerHtml deve conter elementos com class="pdf-block" que são mantidos inteiros.
 const shareHtmlAsPDF = async (innerHtml, filename, shareTitle) => {
   try {
     const [h2c, jsPDF] = await Promise.all([loadHtml2Canvas(), loadJsPDF()]);
@@ -165,27 +167,55 @@ const shareHtmlAsPDF = async (innerHtml, filename, shareTitle) => {
     wrap.style.cssText = `position:fixed;left:-9999px;top:0;width:${A4_WIDTH_PX}px;background:#fff;`;
     wrap.innerHTML = innerHtml;
     document.body.appendChild(wrap);
-    // scale 2 já garante boa nitidez em PDF sem deixar o arquivo gigante
-    const canvas = await h2c(wrap, {backgroundColor:"#ffffff",scale:2,useCORS:true,logging:false});
-    document.body.removeChild(wrap);
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
     const pdf = new jsPDF("p","mm","a4");
-    const pdfWidth  = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth  = pdfWidth;
-    const imgHeight = (canvas.height*imgWidth)/canvas.width;
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const marginMM = 8;                         // margem em mm em todos os lados
+    const usableW  = pdfW - marginMM*2;
+    const usableH  = pdfH - marginMM*2;
 
-    let heightLeft = imgHeight;
-    let position   = 0;
-    pdf.addImage(imgData,"JPEG",0,position,imgWidth,imgHeight);
-    heightLeft -= pdfHeight;
-    while(heightLeft > 0){
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData,"JPEG",0,position,imgWidth,imgHeight);
-      heightLeft -= pdfHeight;
+    // Renderiza cada bloco separadamente para nunca cortar no meio
+    const blocks = Array.from(wrap.querySelectorAll(".pdf-block"));
+    const targets = blocks.length ? blocks : [wrap];
+
+    let y = marginMM;   // posição vertical atual na página (mm)
+    let first = true;
+
+    for(const el of targets){
+      const canvas = await h2c(el, {backgroundColor:"#ffffff",scale:2,useCORS:true,logging:false});
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const blockH  = (canvas.height*usableW)/canvas.width;   // altura do bloco em mm
+
+      // Se o bloco não cabe no que resta da página, começa nova página
+      if(!first && y + blockH > marginMM + usableH){
+        pdf.addPage();
+        y = marginMM;
+      }
+
+      // Caso raro: bloco maior que uma página inteira → fatia esse bloco específico
+      if(blockH > usableH){
+        let sliceY = 0;
+        let remaining = blockH;
+        // desenha em fatias do tamanho da página, mas isso só ocorre em blocos gigantes
+        while(remaining > 0){
+          if(!first){ pdf.addPage(); y = marginMM; }
+          const drawH = Math.min(usableH, remaining);
+          pdf.addImage(imgData,"JPEG",marginMM, y - sliceY, usableW, blockH);
+          remaining -= drawH;
+          sliceY += drawH;
+          first = false;
+        }
+        y = marginMM + usableH; // força nova página no próximo bloco
+        continue;
+      }
+
+      pdf.addImage(imgData,"JPEG",marginMM,y,usableW,blockH);
+      y += blockH + 3;   // 3mm de respiro entre blocos
+      first = false;
     }
+
+    document.body.removeChild(wrap);
 
     const pdfBlob = pdf.output("blob");
     const file = new File([pdfBlob], filename, {type:"application/pdf"});
@@ -573,18 +603,21 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                 const tipos=[...new Set(filtered.map(m=>m.tipo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
                 const innerHtml = `
-                  <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
-                    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
-                      <h1 style="margin:0;font-size:22px;color:#1565c0">📦 Estoque Atual</h1>
-                      <span style="font-size:12px;color:#666">${now}</span>
+                  <div style="font-family:Arial,sans-serif;padding:16px;color:#222">
+                    <div class="pdf-block" style="padding-bottom:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:8px">
+                        <h1 style="margin:0;font-size:22px;color:#1565c0">📦 Estoque Atual</h1>
+                        <span style="font-size:12px;color:#666">${now}</span>
+                      </div>
+                      <p style="margin:0;font-size:13px;color:#555">Total: <strong>${total.toFixed(3).replace(".",",")} kg</strong></p>
                     </div>
-                    <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${total.toFixed(3).replace(".",",")} kg</strong></p>
                     ${tipos.map(tipo=>{
                       const items=[...filtered.filter(m=>m.tipo===tipo)]
                         .sort((a,b)=>(a.corte||a.tipo).localeCompare(b.corte||b.tipo,"pt"));
                       const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
-                      return `<h3 style="margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
-                      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px">
+                      return `<div class="pdf-block" style="margin-top:12px">
+                      <h3 style="margin:0 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
+                      <table style="width:100%;border-collapse:collapse;font-size:13px">
                         <thead><tr>
                           <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Corte</th>
                           <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Local</th>
@@ -605,9 +638,9 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                           <td colspan="5" style="padding:5px 8px;font-weight:700;background:#f9f9f9;border-top:1px solid #ccc">Total ${tipo}</td>
                           <td style="padding:5px 8px;font-weight:700;background:#f9f9f9;border-top:1px solid #ccc;text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
                         </tr></tfoot>
-                      </table>`;
+                      </table></div>`;
                     }).join("")}
-                    <div style="margin-top:24px;padding-top:12px;border-top:2px solid #1565c0;display:flex;justify-content:space-between;align-items:center">
+                    <div class="pdf-block" style="margin-top:16px;padding-top:12px;border-top:2px solid #1565c0;display:flex;justify-content:space-between;align-items:center">
                       <span style="font-size:15px;font-weight:700;color:#333">Total Geral</span>
                       <span style="font-size:18px;font-weight:900;color:#1565c0">${total.toFixed(3).replace(".",",")} kg</span>
                     </div>
@@ -700,17 +733,20 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                   const tiposCh=[...new Set(Object.values(grupos).map(g=>g.tipo))].sort((a,b)=>a.localeCompare(b,"pt"));
                   const innerHtml = `
-                    <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
-                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:12px">
-                        <h1 style="margin:0;font-size:22px;color:#e65c00">🔥 Preparar Churrasco</h1>
-                        <span style="font-size:12px;color:#666">${now}</span>
+                    <div style="font-family:Arial,sans-serif;padding:16px;color:#222">
+                      <div class="pdf-block" style="padding-bottom:8px">
+                        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e65c00;padding-bottom:8px;margin-bottom:8px">
+                          <h1 style="margin:0;font-size:22px;color:#e65c00">🔥 Preparar Churrasco</h1>
+                          <span style="font-size:12px;color:#666">${now}</span>
+                        </div>
+                        <p style="margin:0;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
                       </div>
-                      <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${totalChurrascoKg.toFixed(3).replace(".",",")} kg</strong></p>
                       ${tiposCh.map(tipo=>{
                         const items=Object.values(grupos).filter(g=>g.tipo===tipo).sort((a,b)=>a.corte.localeCompare(b.corte,"pt"));
                         const tot=items.reduce((s,g)=>s+g.kg,0);
-                        return `<h3 style="margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
-                        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px">
+                        return `<div class="pdf-block" style="margin-top:12px">
+                        <h3 style="margin:0 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
+                        <table style="width:100%;border-collapse:collapse;font-size:13px">
                           <thead><tr>
                             <th style="text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px">Corte</th>
                             <th style="text-align:left;padding:6px 8px;background:#fff3e0;border-bottom:2px solid #e65c00;font-size:12px">Origem</th>
@@ -727,9 +763,9 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             <td colspan="3" style="padding:5px 8px;font-weight:700;background:#fff8f0;border-top:1px solid #ccc">Total ${tipo}</td>
                             <td style="padding:5px 8px;font-weight:700;background:#fff8f0;border-top:1px solid #ccc;text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
                           </tr></tfoot>
-                        </table>`;
+                        </table></div>`;
                       }).join("")}
-                      <div style="margin-top:24px;padding-top:12px;border-top:2px solid #e65c00;display:flex;justify-content:space-between;align-items:center">
+                      <div class="pdf-block" style="margin-top:16px;padding-top:12px;border-top:2px solid #e65c00;display:flex;justify-content:space-between;align-items:center">
                         <span style="font-size:15px;font-weight:700;color:#333">Total Geral</span>
                         <span style="font-size:18px;font-weight:900;color:#e65c00">${totalChurrascoKg.toFixed(3).replace(".",",")} kg</span>
                       </div>
@@ -811,15 +847,16 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                   const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
                   const tiposC=[...new Set((shoppingList||[]).map(i=>i.tipo||"—"))].sort((a,b)=>a.localeCompare(b,"pt"));
                   const innerHtml = `
-                    <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
-                      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:16px">
+                    <div style="font-family:Arial,sans-serif;padding:16px;color:#222">
+                      <div class="pdf-block" style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #2e7d32;padding-bottom:8px;margin-bottom:8px">
                         <h1 style="margin:0;font-size:22px;color:#2e7d32">🛒 Lista de Compras</h1>
                         <span style="font-size:12px;color:#666">${now}</span>
                       </div>
                       ${tiposC.map(tipo=>{
                         const items=[...(shoppingList||[]).filter(i=>(i.tipo||"—")===tipo)].sort((a,b)=>a.nome.localeCompare(b.nome,"pt"));
-                        return `<h3 style="margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
-                        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:4px">
+                        return `<div class="pdf-block" style="margin-top:12px">
+                        <h3 style="margin:0 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
+                        <table style="width:100%;border-collapse:collapse;font-size:14px">
                           <thead><tr>
                             <th style="text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px">Item</th>
                             <th style="text-align:left;padding:6px 8px;background:#e8f5e9;border-bottom:2px solid #2e7d32;font-size:12px">Origem</th>
@@ -832,9 +869,9 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                             <td style="padding:7px 8px;border-bottom:1px solid #eee;text-transform:capitalize;color:#555">${i.utilidade||"—"}</td>
                             <td style="padding:7px 8px;border-bottom:1px solid #eee;text-align:right;color:#555">${i.precoKg?`R$ ${Number(i.precoKg).toFixed(2).replace(".",",")}`:"-"}</td>
                           </tr>`).join("")}</tbody>
-                        </table>`;
+                        </table></div>`;
                       }).join("")}
-                      <div style="margin-top:24px;padding-top:12px;border-top:2px solid #2e7d32;display:flex;justify-content:space-between;align-items:center">
+                      <div class="pdf-block" style="margin-top:16px;padding-top:12px;border-top:2px solid #2e7d32;display:flex;justify-content:space-between;align-items:center">
                         <span style="font-size:15px;font-weight:700;color:#333">Total de itens</span>
                         <span style="font-size:18px;font-weight:900;color:#2e7d32">${(shoppingList||[]).length} item${(shoppingList||[]).length!==1?"ns":""}</span>
                       </div>
