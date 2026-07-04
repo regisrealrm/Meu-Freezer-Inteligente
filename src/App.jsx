@@ -126,6 +126,53 @@ const WaLogo    = () => (
   </svg>
 );
 
+// Carrega html2canvas via CDN sob demanda (uma única vez)
+let _h2cPromise = null;
+const loadHtml2Canvas = () => {
+  if(window.html2canvas) return Promise.resolve(window.html2canvas);
+  if(_h2cPromise) return _h2cPromise;
+  _h2cPromise = new Promise((resolve,reject)=>{
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    s.onload = ()=>resolve(window.html2canvas);
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return _h2cPromise;
+};
+
+// Renderiza um bloco HTML fora da tela e compartilha como imagem (foto) pelo menu nativo
+const shareHtmlAsImage = async (innerHtml, filename, shareTitle) => {
+  try {
+    const h2c = await loadHtml2Canvas();
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;background:#fff;";
+    wrap.innerHTML = innerHtml;
+    document.body.appendChild(wrap);
+    const canvas = await h2c(wrap, {backgroundColor:"#ffffff",scale:2});
+    document.body.removeChild(wrap);
+
+    canvas.toBlob(async (blob)=>{
+      if(!blob) { alert("Não foi possível gerar a imagem."); return; }
+      const file = new File([blob], filename, {type:"image/png"});
+      if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+        try {
+          await navigator.share({files:[file], title:shareTitle});
+        } catch(e){ /* usuário cancelou o compartilhamento */ }
+      } else {
+        // Fallback: baixa a imagem para compartilhar manualmente
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename;
+        a.click(); URL.revokeObjectURL(url);
+        alert("Imagem baixada! Compartilhe pelo WhatsApp manualmente.");
+      }
+    }, "image/png");
+  } catch(e) {
+    alert("Não foi possível gerar a imagem. Tente novamente.");
+  }
+};
+
 const getAlert = (meat) => {
   const dte = diffDays(TODAY, meat.dataValidade);
   const dis  = diffDays(meat.dataEntrada, TODAY);
@@ -483,16 +530,57 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
                 </body></html>`;
                 const w=window.open("","_blank"); if(w){w.document.write(html);w.document.close();}
               };
-              const openEstoqueWA = () => {
+              const openEstoqueWA = async () => {
                 const filtered=meats
                   .filter(m=>pfLocais.length===0||pfLocais.includes(m.local))
                   .filter(m=>pfTipos.length===0||pfTipos.includes(m.tipo))
                   .filter(m=>pfOrigens.length===0||pfOrigens.includes(m.origem))
                   .filter(m=>pfUtils.length===0||pfUtils.includes(m.utilidade));
+                if(!filtered.length){alert("Nenhum item com esses filtros.");return;}
                 const total=filtered.reduce((s,m)=>s+m.pesoTotal,0);
-                const linhas=filtered.map(m=>`🥩 ${m.corte||m.tipo} (${m.tipo}) — ${m.pesoTotal.toFixed(3).replace(".",",")} kg`).join("%0A");
-                const txt=`📦 *Estoque Atual*%0ATotal: ${total.toFixed(3).replace(".",",")} kg%0A%0A${linhas}`;
-                window.open(`https://wa.me/?text=${txt}`,"_blank");
+                const now=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+                const tipos=[...new Set(filtered.map(m=>m.tipo).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
+                const innerHtml = `
+                  <div style="font-family:Arial,sans-serif;padding:24px;color:#222">
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #1565c0;padding-bottom:8px;margin-bottom:12px">
+                      <h1 style="margin:0;font-size:22px;color:#1565c0">📦 Estoque Atual</h1>
+                      <span style="font-size:12px;color:#666">${now}</span>
+                    </div>
+                    <p style="margin:0 0 16px;font-size:13px;color:#555">Total: <strong>${total.toFixed(3).replace(".",",")} kg</strong></p>
+                    ${tipos.map(tipo=>{
+                      const items=[...filtered.filter(m=>m.tipo===tipo)]
+                        .sort((a,b)=>(a.corte||a.tipo).localeCompare(b.corte||b.tipo,"pt"));
+                      const tot=items.reduce((s,m)=>s+m.pesoTotal,0);
+                      return `<h3 style="margin:20px 0 6px;font-size:14px;color:#333;text-transform:capitalize">🥩 ${tipo}</h3>
+                      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:4px">
+                        <thead><tr>
+                          <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Corte</th>
+                          <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Local</th>
+                          <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Origem</th>
+                          <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Utilidade</th>
+                          <th style="text-align:left;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Pacotes</th>
+                          <th style="text-align:right;padding:6px 8px;background:#f0f4ff;border-bottom:2px solid #1565c0;font-size:12px">Peso</th>
+                        </tr></thead>
+                        <tbody>${items.map(m=>`<tr>
+                          <td style="padding:5px 8px;border-bottom:1px solid #eee;font-weight:600">${m.corte||m.tipo}</td>
+                          <td style="padding:5px 8px;border-bottom:1px solid #eee">${m.local||"—"}</td>
+                          <td style="padding:5px 8px;border-bottom:1px solid #eee">${m.origem||"—"}</td>
+                          <td style="padding:5px 8px;border-bottom:1px solid #eee;text-transform:capitalize">${m.utilidade||"—"}</td>
+                          <td style="padding:5px 8px;border-bottom:1px solid #eee">${(m.pacotes||[]).filter(p=>p.status!=="consumido").length} pct</td>
+                          <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;font-weight:700">${m.pesoTotal.toFixed(3).replace(".",",")} kg</td>
+                        </tr>`).join("")}</tbody>
+                        <tfoot><tr>
+                          <td colspan="5" style="padding:5px 8px;font-weight:700;background:#f9f9f9;border-top:1px solid #ccc">Total ${tipo}</td>
+                          <td style="padding:5px 8px;font-weight:700;background:#f9f9f9;border-top:1px solid #ccc;text-align:right">${tot.toFixed(3).replace(".",",")} kg</td>
+                        </tr></tfoot>
+                      </table>`;
+                    }).join("")}
+                    <div style="margin-top:24px;padding-top:12px;border-top:2px solid #1565c0;display:flex;justify-content:space-between;align-items:center">
+                      <span style="font-size:15px;font-weight:700;color:#333">Total Geral</span>
+                      <span style="font-size:18px;font-weight:900;color:#1565c0">${total.toFixed(3).replace(".",",")} kg</span>
+                    </div>
+                  </div>`;
+                await shareHtmlAsImage(innerHtml, `estoque-${now.replace(/[\/: ]/g,"-")}.png`, "Estoque Atual");
               };
               return (
                 <div style={{display:"flex",gap:8,marginTop:showPfFilters?0:12}}>
