@@ -1537,7 +1537,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
     .filter(m=>forigens.length===0 ||forigens.includes(m.origem))
     .filter(m=>ftipos.length===0   ||ftipos.includes(m.tipo))
     .filter(m=>!fcorte              ||norm(m.corte||m.tipo).includes(norm(fcorte))||norm(m.tipo).includes(norm(fcorte)))
-    .sort((a,b)=>new Date(a.dataEntrada)-new Date(b.dataEntrada));
+    .sort((a,b)=>(a.tipo||"").localeCompare(b.tipo||"","pt")||(a.corte||a.tipo).localeCompare(b.corte||b.tipo,"pt"));
 
   const detail = meats.find(m=>m.id===selected);
 
@@ -2932,110 +2932,60 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
   const [criancas,  setCriancas]  = useState(4);
   const [perfil,    setPerfil]    = useState("normal");
   const [longo,     setLongo]     = useState(false);
-  const [selTipos,  setSelTipos]  = useState([]);
-  const [result,    setResult]    = useState(null);
-  const [enviados,  setEnviados]  = useState({}); // {tipo: true} após enviar pro Preparar Churrasco
-
-  // Todos os tipos que têm pacotes de churrasco em estoque
-  const tiposDisponiveis = (() => {
-    const tipos = [...new Set(
-      meats.filter(m=>m.utilidade==="churrasco"&&m.pesoTotal>0).map(m=>m.tipo)
-    )].filter(Boolean).sort((a,b)=>a.localeCompare(b,"pt"));
-    return tipos;
-  })();
-
-  const toggleTipo = t => {
-    setSelTipos(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
-    setResult(null);
-  };
+  const [alvo,      setAlvo]      = useState(null);   // peso alvo calculado (kg)
+  const [marcados,  setMarcados]  = useState({});     // {pacoteId: {meatId,corte,tipo,peso}}
 
   const stripAcc = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  const isDenver  = corte => stripAcc(corte.toLowerCase()).includes("denver");
-  const isPicanha = corte => stripAcc(corte.toLowerCase()).includes("picanha");
-  const isPaoAlho = corte => {
-    const c = stripAcc(corte.toLowerCase());
-    return c.includes("pao de alho")||c.includes("pao alho");
-  };
+  const isDenver  = corte => stripAcc((corte||"").toLowerCase()).includes("denver");
+
+  // Todos os pacotes de churrasco disponíveis, agrupados por tipo → corte
+  const estoqueChurrasco = (() => {
+    const grupos = {};
+    meats.filter(m=>m.utilidade==="churrasco"&&m.pesoTotal>0).forEach(m=>{
+      (m.pacotes||[]).filter(p=>p.status!=="consumido"&&p.pesoAtual>0).forEach(p=>{
+        const tipo = m.tipo||"—";
+        if(!grupos[tipo]) grupos[tipo]={tipo, pacotes:[]};
+        grupos[tipo].pacotes.push({
+          meatId:m.id, pacoteId:p.id, corte:m.corte||m.tipo, tipo,
+          peso:p.pesoAtual, origem:m.origem||"—", dataEntrada:m.dataEntrada
+        });
+      });
+    });
+    // ordena tipos A-Z e, dentro, pacotes por corte A-Z (Denver primeiro)
+    return Object.values(grupos)
+      .sort((a,b)=>a.tipo.localeCompare(b.tipo,"pt"))
+      .map(g=>({
+        ...g,
+        pacotes: g.pacotes.sort((a,b)=>{
+          if(isDenver(a.corte)&&!isDenver(b.corte)) return -1;
+          if(isDenver(b.corte)&&!isDenver(a.corte)) return 1;
+          return a.corte.localeCompare(b.corte,"pt") || (new Date(a.dataEntrada||0)-new Date(b.dataEntrada||0));
+        })
+      }));
+  })();
 
   const calcular = () => {
-    if(!selTipos.length) return alert("Selecione ao menos um tipo de carne.");
     const gAdulto = PERFIL_G[perfil]*(longo?1.2:1);
     const totalKg = Math.round(((adultos*gAdulto+criancas*gAdulto*0.5)/1000)*1000)/1000;
-    const kgPerTipo = totalKg/selTipos.length;
-    const totalPessoas = adultos+criancas;
-    const ratio = Math.max(1, Math.ceil(totalPessoas/10));
-
-    const byTipo = selTipos.map(tipo=>{
-      const allPkgs = meats
-        .filter(m=>m.tipo===tipo&&m.utilidade==="churrasco"&&m.pesoTotal>0)
-        .flatMap(m=>(m.pacotes||[])
-          .filter(p=>p.status!=="consumido"&&p.pesoAtual>0)
-          .map(p=>({meatId:m.id,corte:m.corte||m.tipo,pacoteId:p.id,peso:p.pesoAtual,dataEntrada:m.dataEntrada}))
-        );
-
-      // Limite de pacotes para o tipo inteiro (frango/suína: 1 pacote a cada 10 pessoas)
-      const tipoCap = (tipo==="frango"||tipo==="suína") ? ratio : Infinity;
-
-      // Regra universal: TODO corte é limitado a 1 pacote a cada 10 pessoas
-      const tipoLimitado = true;
-
-      // Denver sempre priorizado primeiro; dentro de cada grupo, pacotes mais antigos primeiro (FIFO)
-      const byOldest = (a,b) => new Date(a.dataEntrada||0) - new Date(b.dataEntrada||0);
-      const denverPkgs = allPkgs.filter(p=>isDenver(p.corte)).sort(byOldest);
-      const otherPkgs  = allPkgs.filter(p=>!isDenver(p.corte)).sort(byOldest);
-      const pool = [...denverPkgs, ...otherPkgs];
-
-      // Limite de 5% acima do necessário — 1ª tentativa fica dentro desse teto
-      const tetoKg = Math.round(kgPerTipo*1.05*1000)/1000;
-
-      let soma=0; const selecionados=[]; const corteCounts={};
-      const usedIds = new Set();
-      const podeUsar = p => {
-        const ck = stripAcc(p.corte.toLowerCase());
-        return !usedIds.has(p.pacoteId) && (corteCounts[ck]||0)<ratio && selecionados.length<tipoCap;
-      };
-      const usar = p => {
-        selecionados.push(p);
-        usedIds.add(p.pacoteId);
-        soma=Math.round((soma+p.peso)*1000)/1000;
-        const ck = stripAcc(p.corte.toLowerCase());
-        corteCounts[ck]=(corteCounts[ck]||0)+1;
-      };
-
-      // 1ª passada — respeita o teto de 5%
-      for(const p of pool){
-        if(soma>=kgPerTipo) break;
-        if(!podeUsar(p)) continue;
-        if(Math.round((soma+p.peso)*1000)/1000>tetoKg) continue;
-        usar(p);
-      }
-
-      // 2ª passada — se ainda faltar peso e nada coube no teto, usa outros cortes mesmo
-      // estourando o limite — escolhe o MENOR pacote que já seja suficiente pra fechar a conta
-      // (minimiza o excedente); só usa o maior disponível se nenhum sozinho bastar
-      while(soma<kgPerTipo){
-        const candidatos = pool.filter(podeUsar);
-        if(!candidatos.length) break;
-        const falta = Math.round((kgPerTipo-soma)*1000)/1000;
-        const suficientes = candidatos.filter(p=>p.peso>=falta).sort((a,b)=>a.peso-b.peso);
-        const escolhido = suficientes.length
-          ? suficientes[0]
-          : [...candidatos].sort((a,b)=>b.peso-a.peso)[0];
-        usar(escolhido);
-      }
-
-      // Regra universal — nunca sugere comprar mais, a diversidade de cortes é o objetivo
-      const falta = 0;
-
-      return {tipo, needed:kgPerTipo, selecionados, totalSugg:soma, falta, tipoLimitado, capLimit:tipoCap};
-    });
-
-    setResult({totalKg, adultos, criancas, gAdulto, byTipo, ratio});
-    setEnviados({});
+    setAlvo({totalKg, adultos, criancas, gAdulto});
+    setMarcados({});
   };
 
+  const togglePacote = (p) => {
+    setMarcados(prev=>{
+      const n = {...prev};
+      if(n[p.pacoteId]) delete n[p.pacoteId];
+      else n[p.pacoteId] = p;
+      return n;
+    });
+  };
+
+  const somaMarcada = Math.round(
+    Object.values(marcados).reduce((s,p)=>s+p.peso,0)*1000
+  )/1000;
+
   const durBtn = (label,val) => (
-    <button onClick={()=>{setLongo(val);setResult(null);}}
+    <button onClick={()=>{setLongo(val);setAlvo(null);}}
       style={{flex:1,padding:"10px 0",borderRadius:8,
         border:`2px solid ${longo===val?C.primary:C.border}`,
         background:longo===val?C.primary+"22":"#0A1520",
@@ -3043,6 +2993,16 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       {label}
     </button>
   );
+
+  const enviarParaChurrasco = () => {
+    const list = Object.values(marcados).map(p=>({meatId:p.meatId,pacoteId:p.pacoteId}));
+    if(!list.length){alert("Marque ao menos um pacote.");return;}
+    onSendToChurrasco(list);
+    setTab?.("dashboard");
+  };
+
+  const restante = alvo ? Math.round((alvo.totalKg - somaMarcada)*1000)/1000 : 0;
+  const atingiu  = alvo && somaMarcada >= alvo.totalKg;
 
   return (
     <div>
@@ -3052,10 +3012,10 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       <Card style={{marginBottom:14}}>
         <div style={GRID2}>
           <FInput label="Adultos" type="number" min={1} value={adultos} onFocus={e=>e.target.select()}
-            onChange={e=>{setAdultos(Math.max(1,+e.target.value));setResult(null);}}/>
+            onChange={e=>{setAdultos(Math.max(1,+e.target.value));setAlvo(null);}}/>
           <FInput label="Crianças" type="number" min={0} value={criancas} onFocus={e=>e.target.select()}
-            onChange={e=>{setCriancas(Math.max(0,+e.target.value));setResult(null);}}/>
-          <FSelect label="Apetite" value={perfil} onChange={e=>{setPerfil(e.target.value);setResult(null);}}>
+            onChange={e=>{setCriancas(Math.max(0,+e.target.value));setAlvo(null);}}/>
+          <FSelect label="Apetite" value={perfil} onChange={e=>{setPerfil(e.target.value);setAlvo(null);}}>
             <option value="pouco">Come pouco — 300g/adulto</option>
             <option value="normal">Normal — 400g/adulto</option>
             <option value="muito">Come muito — 500g/adulto</option>
@@ -3070,191 +3030,90 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
         </div>
       </Card>
 
-      {/* Seleção de tipos */}
-      <div style={{fontWeight:700,fontSize:14,marginBottom:10,color:C.text}}>
-        🥩 Quais tipos de carne vai servir?
-      </div>
-      {tiposDisponiveis.length===0 ? (
-        <Card style={{marginBottom:14}}>
-          <div style={{color:C.muted,textAlign:"center",padding:8}}>
-            Nenhum item com utilidade "churrasco" em estoque.
-          </div>
-        </Card>
-      ) : (
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-          {tiposDisponiveis.map(tipo=>{
-            const on     = selTipos.includes(tipo);
-            const accent = TIPO_COLORS[tipo]||C.muted;
-            const pkgs   = meats.filter(m=>m.tipo===tipo&&m.utilidade==="churrasco"&&m.pesoTotal>0)
-              .flatMap(m=>(m.pacotes||[]).filter(p=>p.status!=="consumido"&&p.pesoAtual>0));
-            const totalKgTipo = Math.round(pkgs.reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
-            return (
-              <div key={tipo} onClick={()=>toggleTipo(tipo)}
-                style={{background:on?accent+"1A":C.card,border:`2px solid ${on?accent:C.border}`,
-                  borderRadius:10,padding:"12px 14px",cursor:"pointer",
-                  display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:22,height:22,borderRadius:6,flexShrink:0,
-                  background:on?accent:"transparent",border:`2px solid ${on?accent:C.dim}`,
-                  display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  {on&&<span style={{color:"#fff",fontSize:12,fontWeight:900}}>✓</span>}
-                </div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:700,fontSize:15,textTransform:"capitalize"}}>{tipo}</div>
-                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>
-                    {pkgs.length} pacote{pkgs.length!==1?"s":" "} · {fmtKg(totalKgTipo)} em estoque
-                  </div>
-                </div>
-                <div style={{fontWeight:800,color:accent,fontSize:15}}>{fmtKg(totalKgTipo)}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <Btn onClick={calcular}>🔥 Calcular churrasco</Btn>
 
-      <Btn onClick={calcular} disabled={!selTipos.length}>🔥 Calcular churrasco</Btn>
-
-      {/* Resultado */}
-      {result&&(
+      {/* Resultado: peso alvo + estoque para marcar */}
+      {alvo&&(
         <>
-          {/* Total */}
+          {/* Card fixo do total necessário e progresso */}
           <Card style={{background:"#1A1800",borderColor:"#FF6B3555",marginTop:16,marginBottom:14,textAlign:"center"}}>
             <div style={{fontSize:12,color:C.muted,marginBottom:4}}>Total necessário</div>
-            <div style={{fontSize:52,fontWeight:900,color:C.primary,lineHeight:1}}>{fmtKg(result.totalKg)}</div>
+            <div style={{fontSize:48,fontWeight:900,color:C.primary,lineHeight:1}}>{fmtKg(alvo.totalKg)}</div>
             <div style={{fontSize:13,color:C.muted,marginTop:6}}>
-              {result.adultos} adultos × {result.gAdulto.toFixed(0)}g
-              {result.criancas>0&&` + ${result.criancas} crianças × ${(result.gAdulto*0.5).toFixed(0)}g`}
+              {alvo.adultos} adultos × {alvo.gAdulto.toFixed(0)}g
+              {alvo.criancas>0&&` + ${alvo.criancas} crianças × ${(alvo.gAdulto*0.5).toFixed(0)}g`}
             </div>
-            <div style={{fontSize:12,color:C.dim,marginTop:4}}>
-              {fmtKg(result.totalKg/result.byTipo.length)} por tipo · {result.byTipo.length} tipo{result.byTipo.length!==1?"s":""}
-            </div>
-            <div style={{fontSize:11,color:C.dim,marginTop:2}}>
-              📏 Regra universal: máximo {result.ratio} pacote{result.ratio!==1?"s":""} por corte a cada 10 pessoas
+
+            {/* Progresso */}
+            <div style={{marginTop:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:6}}>
+                <span style={{color:C.muted}}>Marcado: <strong style={{color:atingiu?C.success:C.text}}>{fmtKg(somaMarcada)}</strong></span>
+                <span style={{color:atingiu?C.success:C.warning,fontWeight:700}}>
+                  {atingiu
+                    ? (somaMarcada>alvo.totalKg ? `+${fmtKg(Math.round((somaMarcada-alvo.totalKg)*1000)/1000)} a mais` : "no ponto ✅")
+                    : `faltam ${fmtKg(restante)}`}
+                </span>
+              </div>
+              <div style={{background:C.border,borderRadius:6,height:10,overflow:"hidden"}}>
+                <div style={{width:`${Math.min(100,(somaMarcada/alvo.totalKg)*100)}%`,height:"100%",
+                  background:atingiu?C.success:C.warning,transition:"width 0.3s ease"}}/>
+              </div>
             </div>
           </Card>
 
-          {/* Por tipo */}
-          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>📋 Sugestão por tipo</div>
-          {result.byTipo.map(({tipo,needed,selecionados,totalSugg,falta,tipoLimitado,capLimit})=>{
-            const accent = TIPO_COLORS[tipo]||C.muted;
-            const ok = falta===0;
-            // Agrupa por corte
-            const porCorte = {};
-            selecionados.forEach(p=>{
-              if(!porCorte[p.corte]) porCorte[p.corte]={corte:p.corte,pkgs:[]};
-              porCorte[p.corte].pkgs.push(p.peso);
-            });
-            return (
-              <Card key={tipo} style={{marginBottom:10,borderLeft:`4px solid ${accent}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                  <div>
-                    <div style={{fontWeight:800,fontSize:16,textTransform:"capitalize",color:accent}}>{tipo}</div>
-                    {tipoLimitado&&(
-                      <div style={{fontSize:10,color:C.warning,fontWeight:600,marginTop:2}}>
-                        {capLimit===Infinity
-                          ? "📏 1 pacote por corte (sem limite total)"
-                          : `📏 limitado a ${capLimit} pacote${capLimit!==1?"s":""} no total`}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:11,color:C.muted}}>necessário</div>
-                    <div style={{fontWeight:700,color:C.text}}>{fmtKg(needed)}</div>
-                  </div>
-                </div>
+          {/* Estoque de churrasco para marcar */}
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>
+            ✅ Marque o que vai usar (vai abatendo do total)
+          </div>
 
-                {selecionados.length>0 ? (
-                  <>
-                    {Object.values(porCorte).map(({corte,pkgs})=>{
-                      const denver = isDenver(corte);
-                      return (
-                        <div key={corte} style={{display:"flex",justifyContent:"space-between",
-                          alignItems:"center",padding:"6px 0",borderBottom:`1px solid ${C.border}44`}}>
-                          <div>
-                            <span style={{fontWeight:600,fontSize:13}}>
-                              {denver&&"⭐ "}{corte}
-                            </span>
-                            <span style={{fontSize:11,color:C.muted,marginLeft:8}}>
-                              {pkgs.length} pacote{pkgs.length!==1?"s":""}
-                            </span>
-                            <span style={{fontSize:10,color:C.warning,marginLeft:6}}>📏 limitado</span>
-                          </div>
-                          <span style={{fontWeight:700,color:accent,fontSize:13}}>
-                            {fmtKg(Math.round(pkgs.reduce((s,p)=>s+p,0)*1000)/1000)}
-                          </span>
+          {estoqueChurrasco.length===0 ? (
+            <Card style={{marginBottom:14}}>
+              <div style={{color:C.muted,textAlign:"center",padding:8}}>
+                Nenhum item com utilidade "churrasco" em estoque.
+              </div>
+            </Card>
+          ) : (
+            estoqueChurrasco.map(({tipo,pacotes})=>{
+              const accent = TIPO_COLORS[tipo]||C.muted;
+              return (
+                <Card key={tipo} style={{marginBottom:10,borderLeft:`4px solid ${accent}`}}>
+                  <div style={{fontWeight:800,fontSize:15,textTransform:"capitalize",color:accent,marginBottom:8}}>{tipo}</div>
+                  {pacotes.map(p=>{
+                    const on = !!marcados[p.pacoteId];
+                    const denver = isDenver(p.corte);
+                    return (
+                      <div key={p.pacoteId} onClick={()=>togglePacote(p)}
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",
+                          borderBottom:`1px solid ${C.border}44`,cursor:"pointer"}}>
+                        <div style={{width:20,height:20,borderRadius:5,flexShrink:0,
+                          background:on?accent:"transparent",border:`2px solid ${on?accent:C.dim}`,
+                          display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          {on&&<span style={{color:"#fff",fontSize:11,fontWeight:900}}>✓</span>}
                         </div>
-                      );
-                    })}
-                    <div style={{display:"flex",justifyContent:"space-between",
-                      alignItems:"center",marginTop:8,paddingTop:6,
-                      borderTop:`1px solid ${C.border}`}}>
-                      <span style={{fontSize:12,color:ok?C.success:C.warning,fontWeight:600}}>
-                        {ok?`✅ Total: ${fmtKg(totalSugg)}`:`⚠️ Total: ${fmtKg(totalSugg)}`}
-                        {totalSugg>needed&&ok&&
-                          <span style={{fontSize:10,color:C.muted,marginLeft:6}}>
-                            (+{fmtKg(Math.round((totalSugg-needed)*1000)/1000)} a mais — ok)
-                          </span>
-                        }
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{color:C.muted,fontSize:13,padding:"4px 0"}}>Sem pacotes em estoque</div>
-                )}
-
-                {selecionados.length>0&&(
-                  <button onClick={()=>{
-                    onSendToChurrasco(selecionados.map(p=>({meatId:p.meatId,pacoteId:p.pacoteId})));
-                    setEnviados(prev=>({...prev,[tipo]:true}));
-                  }}
-                    disabled={enviados[tipo]}
-                    style={{width:"100%",marginTop:10,background:enviados[tipo]?C.success+"22":C.primary,
-                      border:enviados[tipo]?`1px solid ${C.success}55`:"none",
-                      borderRadius:10,padding:"10px",cursor:enviados[tipo]?"default":"pointer",
-                      color:enviados[tipo]?C.success:"#fff",fontSize:13,fontWeight:700}}>
-                    {enviados[tipo]?"✅ Enviado para Preparar Churrasco":"🔥 Enviar para Preparar Churrasco"}
-                  </button>
-                )}
-              </Card>
-            );
-          })}
-
-          {/* Resumo */}
-          <Card style={{background:"#0D1B2A",border:`1px solid ${C.border}`,marginTop:4}}>
-            <div style={{fontWeight:700,marginBottom:12,fontSize:15}}>📊 Resumo</div>
-            <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{color:C.muted}}>Necessário</span>
-              <strong style={{color:C.primary}}>{fmtKg(result.totalKg)}</strong>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
-              <span style={{color:C.muted}}>🧊 Sugerido do estoque</span>
-              <strong style={{color:C.success}}>{fmtKg(Math.round(result.byTipo.reduce((s,t)=>s+t.totalSugg,0)*1000)/1000)}</strong>
-            </div>
-            {(()=>{
-              const naoCoberto = Math.round(
-                result.byTipo.reduce((s,t)=>s+Math.max(0,t.needed-t.totalSugg),0)*1000
-              )/1000;
-              return naoCoberto>0 ? (
-                <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0"}}>
-                  <span style={{color:C.warning,fontSize:12}}>📏 Não coberto (regra de 1 pacote/corte)</span>
-                  <strong style={{color:C.warning}}>{fmtKg(naoCoberto)}</strong>
-                </div>
-              ) : (
-                <div style={{textAlign:"center",padding:"8px 0",color:C.success,fontWeight:700,fontSize:14}}>
-                  ✅ Estoque suficiente para o churrasco!
-                </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:600,fontSize:13}}>{denver&&"⭐ "}{p.corte}</div>
+                          <div style={{fontSize:11,color:C.muted}}>{p.origem}</div>
+                        </div>
+                        <div style={{fontWeight:700,color:on?accent:C.muted,fontSize:14,flexShrink:0}}>
+                          {fmtKg(p.peso)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </Card>
               );
-            })()}
-          </Card>
+            })
+          )}
 
-          <button onClick={()=>{
-            const todos = result.byTipo.flatMap(t=>t.selecionados.map(p=>({meatId:p.meatId,pacoteId:p.pacoteId})));
-            if(!todos.length){alert("Nenhum pacote sugerido para enviar.");return;}
-            onSendToChurrasco(todos);
-            setTab?.("dashboard");
-          }} style={{width:"100%",marginTop:12,background:C.primary,border:"none",
-            borderRadius:12,padding:"14px",cursor:"pointer",color:"#fff",
-            fontSize:15,fontWeight:800}}>
-            🔥 Enviar tudo para Preparar Churrasco
+          {/* Botão enviar */}
+          <button onClick={enviarParaChurrasco}
+            disabled={Object.keys(marcados).length===0}
+            style={{width:"100%",marginTop:12,
+              background:Object.keys(marcados).length===0?C.dim:C.primary,
+              border:"none",borderRadius:12,padding:"14px",
+              cursor:Object.keys(marcados).length===0?"default":"pointer",
+              color:"#fff",fontSize:15,fontWeight:800}}>
+            🔥 Enviar para Preparar Churrasco ({Object.keys(marcados).length} pacote{Object.keys(marcados).length!==1?"s":""})
           </button>
         </>
       )}
