@@ -1537,7 +1537,7 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
     .filter(m=>forigens.length===0 ||forigens.includes(m.origem))
     .filter(m=>ftipos.length===0   ||ftipos.includes(m.tipo))
     .filter(m=>!fcorte              ||norm(m.corte||m.tipo).includes(norm(fcorte))||norm(m.tipo).includes(norm(fcorte)))
-    .sort((a,b)=>(a.tipo||"").localeCompare(b.tipo||"","pt")||(a.corte||a.tipo).localeCompare(b.corte||b.tipo,"pt"));
+    .sort((a,b)=>(a.corte||a.tipo).localeCompare(b.corte||b.tipo,"pt"));
 
   const detail = meats.find(m=>m.id===selected);
 
