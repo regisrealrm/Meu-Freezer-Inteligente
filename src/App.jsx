@@ -2956,11 +2956,9 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
       .sort((a,b)=>a.tipo.localeCompare(b.tipo,"pt"))
       .map(g=>({
         ...g,
-        pacotes: g.pacotes.sort((a,b)=>{
-          if(isDenver(a.corte)&&!isDenver(b.corte)) return -1;
-          if(isDenver(b.corte)&&!isDenver(a.corte)) return 1;
-          return a.corte.localeCompare(b.corte,"pt") || (new Date(a.dataEntrada||0)-new Date(b.dataEntrada||0));
-        })
+        pacotes: g.pacotes.sort((a,b)=>
+          a.corte.localeCompare(b.corte,"pt") || (new Date(a.dataEntrada||0)-new Date(b.dataEntrada||0))
+        )
       }));
   })();
 
