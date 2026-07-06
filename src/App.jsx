@@ -4,7 +4,7 @@ import {
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref as dbRef, set, onValue } from "firebase/database";
+import { getDatabase, ref as dbRef, set, onValue, runTransaction } from "firebase/database";
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -3564,6 +3564,7 @@ export default function App() {
 
   const lastSaved      = useRef("");
   const isRemoteUpdate = useRef(false);
+  const lastRemoteTs   = useRef(0);   // timestamp da última versão remota conhecida
 
   // ── LOAD: localStorage primeiro (instantâneo) + Firebase real-time ─────────
   useEffect(()=>{
@@ -3583,6 +3584,7 @@ export default function App() {
           // lastSaved guarda SEMPRE só os dados reais (sem _ts) para comparação estável
           const {_ts:_, ...rest} = JSON.parse(local);
           lastSaved.current = JSON.stringify(rest);
+          lastRemoteTs.current = d._ts || 0;
         }
       }
     } catch(e){}
@@ -3605,6 +3607,7 @@ export default function App() {
         const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
         if(remoteTs > localTs && temDados) {
           isRemoteUpdate.current = true;
+          lastRemoteTs.current = remoteTs;
           setMeats(data.meats              || []);
           setExits(data.exits              || []);
           setCatalog(data.catalog          || []);
@@ -3615,6 +3618,9 @@ export default function App() {
           try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
           const {_ts:__, ...rest} = data;
           lastSaved.current = JSON.stringify(rest);
+        } else if(remoteTs > lastRemoteTs.current) {
+          // Mesmo que não aplique (ex: local mais novo), registra o ts remoto visto
+          lastRemoteTs.current = remoteTs;
         }
       }, ()=>{});
       return ()=>unsubscribe();
@@ -3643,9 +3649,20 @@ export default function App() {
 
     const t = setTimeout(async ()=>{
       try {
-        await set(dbRef(db, DB_PATH), dataToSave);
+        // Transação: só grava se a versão remota NÃO for mais nova que a nossa base.
+        // Isso evita que um dispositivo com dados antigos sobrescreva mudanças recentes de outro.
+        await runTransaction(dbRef(db, DB_PATH), (remote)=>{
+          const remoteTs = remote?._ts || 0;
+          // Se o remoto é mais recente que o estado em que baseamos esta gravação,
+          // aborta (retorna undefined) — o listener onValue vai trazer a versão nova.
+          if(remoteTs > lastRemoteTs.current) {
+            return; // aborta a transação, mantém o dado remoto
+          }
+          return dataToSave;
+        });
+        lastRemoteTs.current = ts;
       } catch(e){
-        console.warn("Firebase offline:", e.message);
+        console.warn("Firebase sync:", e.message);
       }
     }, 1000);
     return ()=>clearTimeout(t);
