@@ -4,7 +4,7 @@ import {
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref as dbRef, set, onValue } from "firebase/database";
+import { getDatabase, ref as dbRef, set, onValue, get as dbGet } from "firebase/database";
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -3154,8 +3154,12 @@ function Relatorios({meats,exits,entries}) {
   // isso garante que mesclagens (auto-merge de itens iguais) também apareçam no dia certo,
   // já que antes ficavam "escondidas" dentro da data original do item.
   const meatsRange    = (entries||[]).filter(e=>inRange(e.dataEntrada));
-  const transfers     = [...exitsRange].filter(e=>e.motivo==="transferência").reverse();
-  const saidas        = exitsRange.filter(e=>e.motivo!=="transferência");
+
+  // Ordena pelo momento exato (_ts) — o mais recente sempre primeiro. Registros antigos
+  // (de antes dessa mudança) não têm _ts, então caem para a data como aproximação.
+  const tsOf = (item, dateField) => item._ts || new Date(item[dateField]||0).getTime();
+  const transfers     = [...exitsRange].filter(e=>e.motivo==="transferência").sort((a,b)=>tsOf(b,"dataSaida")-tsOf(a,"dataSaida"));
+  const saidas        = [...exitsRange].filter(e=>e.motivo!=="transferência").sort((a,b)=>tsOf(b,"dataSaida")-tsOf(a,"dataSaida"));
   const locaisComSaida= [...new Set(saidas.map(e=>e.local).filter(Boolean))];
 
   return (
@@ -3265,7 +3269,7 @@ function Relatorios({meats,exits,entries}) {
             <div style={{fontWeight:700,marginBottom:10}}>📥 Histórico de entradas ({meatsRange.length})</div>
             {meatsRange.length===0
               ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma entrada no período.</div>
-              : [...meatsRange].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(e=>(
+              : [...meatsRange].sort((a,b)=>tsOf(b,"dataEntrada")-tsOf(a,"dataEntrada")).map(e=>(
                 <div key={e.id} style={{display:"flex",justifyContent:"space-between",
                   alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
@@ -3297,7 +3301,7 @@ function Relatorios({meats,exits,entries}) {
               : (
                 <>
                   {locaisComSaida.length>1&&locaisComSaida.map(local=>{
-                    const items=[...saidas].filter(e=>e.local===local).reverse();
+                    const items=[...saidas].filter(e=>e.local===local);
                     if(!items.length) return null;
                     const totalLocal=items.reduce((s,e)=>s+e.pesoRetirado,0);
                     return (
@@ -3328,7 +3332,7 @@ function Relatorios({meats,exits,entries}) {
                       </div>
                     );
                   })}
-                  {locaisComSaida.length<=1&&[...saidas].reverse().map(e=>{
+                  {locaisComSaida.length<=1&&saidas.map(e=>{
                     const motivoColor=e.motivo==="churrasco"?C.primary:e.motivo==="descarte"?C.danger:e.motivo==="consumo"?C.success:C.info;
                     return (
                       <div key={e.id} style={{display:"flex",justifyContent:"space-between",
@@ -3567,6 +3571,7 @@ export default function App() {
   const [entradaPrefill, setEntradaPrefill] = useState(null);
   const [loaded,      setLoaded]      = useState(false);
   const [saveStatus,  setSaveStatus]  = useState("idle");
+  const [syncStatus,  setSyncStatus]  = useState("ok"); // ok | checking | stale (falhou ao voltar do 2º plano)
   const [storageOk,   setStorageOk]   = useState(null);
   const [showBackup,  setShowBackup]  = useState(false);
   const [importTxt,   setImportTxt]   = useState("");
@@ -3613,43 +3618,62 @@ export default function App() {
     setLoaded(true);
     setStorageOk(true);
 
+    // Aplica dados remotos ao estado local — usado tanto pelo listener em tempo real
+    // quanto pela checagem manual quando o app volta a ficar visível (segundo plano → ativo)
+    const applyRemoteData = (data) => {
+      const remoteTs = data._ts || 0;
+      const localTs  = (() => {
+        try { return JSON.parse(localStorage.getItem("mfi_local_data")||"{}")._ts||0; }
+        catch { return 0; }
+      })();
+      const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
+      if(remoteTs > localTs && temDados) {
+        skipSaveUntil.current = Date.now() + 800;
+        lastRemoteTs.current = remoteTs;
+        setMeats(data.meats              || []);
+        setExits(data.exits              || []);
+        setEntries(data.entries          || []);
+        setCatalog(data.catalog          || []);
+        setShoppingList(data.shoppingList|| []);
+        if(data.appConfig) setAppConfig(data.appConfig);
+        const withTs = JSON.stringify(data);
+        try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
+        const {_ts:__, ...rest} = data;
+        lastSaved.current = JSON.stringify(rest);
+        return true;
+      } else if(remoteTs > lastRemoteTs.current) {
+        lastRemoteTs.current = remoteTs;
+      }
+      return false;
+    };
+
     // Firebase: listener em tempo real
     try {
       const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
         const data = snapshot.val();
         if(!data) return;
-
-        const remoteTs = data._ts || 0;
-        const localTs  = (() => {
-          try { return JSON.parse(localStorage.getItem("mfi_local_data")||"{}")._ts||0; }
-          catch { return 0; }
-        })();
-
-        // Proteção dupla: só aceita dado do Firebase se for mais recente E não vazio
-        const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
-        if(remoteTs > localTs && temDados) {
-          // Janela de proteção: as 5 chamadas de setState abaixo (meats/exits/catalog/
-          // shoppingList/appConfig) podem disparar múltiplos renders separados; qualquer
-          // save que ocorra nesse intervalo deve ser ignorado, não só o primeiro.
-          skipSaveUntil.current = Date.now() + 800;
-          lastRemoteTs.current = remoteTs;
-          setMeats(data.meats              || []);
-          setExits(data.exits              || []);
-          setEntries(data.entries          || []);
-          setCatalog(data.catalog          || []);
-          setShoppingList(data.shoppingList|| []);
-          if(data.appConfig) setAppConfig(data.appConfig);
-          // Atualiza localStorage e hash de comparação (sem _ts)
-          const withTs = JSON.stringify(data);
-          try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
-          const {_ts:__, ...rest} = data;
-          lastSaved.current = JSON.stringify(rest);
-        } else if(remoteTs > lastRemoteTs.current) {
-          // Mesmo que não aplique (ex: local mais novo), registra o ts remoto visto
-          lastRemoteTs.current = remoteTs;
-        }
+        applyRemoteData(data);
       }, ()=>{});
-      return ()=>unsubscribe();
+
+      // Quando o app volta do segundo plano (aba minimizada, app trocado no celular),
+      // o iOS costuma suspender a conexão em tempo real do Firebase — o listener pode
+      // ficar "travado" sem avisar. Ao voltar a ficar visível, buscamos os dados mais
+      // recentes manualmente, sem apagar nada que a pessoa esteja digitando na hora.
+      const onVisible = async () => {
+        if(document.visibilityState !== "visible") return;
+        setSyncStatus("checking");
+        try {
+          const snap = await dbGet(dbRef(db, DB_PATH));
+          const data = snap.val();
+          if(data) applyRemoteData(data);
+          setSyncStatus("ok");
+        } catch(e){
+          setSyncStatus("stale"); // mostra aviso discreto pra pessoa atualizar manualmente
+        }
+      };
+      document.addEventListener("visibilitychange", onVisible);
+
+      return ()=>{ unsubscribe(); document.removeEventListener("visibilitychange", onVisible); };
     } catch(e){}
   },[]);
 
@@ -3797,7 +3821,7 @@ export default function App() {
     setMeats(p => [...p, newMeat]);
     // Log independente: registra a entrada de hoje, mesmo que futuramente seja mesclada
     setEntries(p => [...p, {
-      id: uid(), meatId: newMeat.id, tipo: newMeat.tipo, corte: newMeat.corte,
+      id: uid(), _ts: Date.now(), meatId: newMeat.id, tipo: newMeat.tipo, corte: newMeat.corte,
       origem: newMeat.origem, local: newMeat.local, peso: pesoTotal,
       quantidadePecas: pacotes.length, dataEntrada: newMeat.dataEntrada,
       feitorPor: currentUser || "", tipoRegistro: "novo",
@@ -3834,7 +3858,7 @@ export default function App() {
     // Log independente: mesclagens TAMBÉM contam como entrada de hoje no histórico
     if(alvo){
       setEntries(p => [...p, {
-        id: uid(), meatId: id, tipo: alvo.tipo, corte: alvo.corte,
+        id: uid(), _ts: Date.now(), meatId: id, tipo: alvo.tipo, corte: alvo.corte,
         origem: alvo.origem, local: alvo.local, peso: totalAdd,
         quantidadePecas: pesos.length, dataEntrada: TODAY,
         feitorPor: currentUser || "", tipoRegistro: "mesclagem",
@@ -4014,7 +4038,7 @@ export default function App() {
     if(!m) return;
     if(ex.motivo==="transferência") {
       setMeats(p=>p.map(x=>x.id===ex.carneId?{...x,local:ex.localDestino}:x));
-      setExits(p=>[...p,{...ex,id:uid(),carneNome:m.corte||m.tipo,tipo:m.tipo,
+      setExits(p=>[...p,{...ex,id:uid(),_ts:Date.now(),carneNome:m.corte||m.tipo,tipo:m.tipo,
         pesoRetirado:m.pesoTotal, feitorPor:currentUser,
         observacao:`${m.local} → ${ex.localDestino}${ex.observacao?` · ${ex.observacao}`:""}`}]);
     } else {
@@ -4035,7 +4059,7 @@ export default function App() {
         quantidadePecas:qtdAtiva, status:novoStatus,
         precoPago:novoTotal===0?0:novoPreco,
       }:x));
-      setExits(p=>[...p,{...ex,id:uid(),carneNome:m.corte||m.tipo,tipo:m.tipo,feitorPor:currentUser}]);
+      setExits(p=>[...p,{...ex,id:uid(),_ts:Date.now(),carneNome:m.corte||m.tipo,tipo:m.tipo,feitorPor:currentUser}]);
     }
   };
 
@@ -4175,6 +4199,17 @@ export default function App() {
             </div>
           )}
 
+          {/* Aviso discreto: app voltou do 2º plano e não conseguiu confirmar dados atualizados */}
+          {syncStatus==="stale"&&(
+            <div onClick={()=>window.location.reload()}
+              style={{background:"#2A0B14",border:`1px solid ${C.danger}44`,borderRadius:8,
+                padding:"8px 12px",margin:"8px 0 4px",fontSize:12,color:C.danger,
+                cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>⚠️ Não foi possível confirmar se os dados estão atualizados.</span>
+              <strong style={{textDecoration:"underline",flexShrink:0,marginLeft:8}}>Toque para atualizar</strong>
+            </div>
+          )}
+
           {/* Nav grid 3×2 */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,
             padding:"10px 0 10px"}}>
@@ -4200,7 +4235,7 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onCompreiItem={onCompreiItem} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),_ts:Date.now(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig} prefill={entradaPrefill} onClearPrefill={()=>setEntradaPrefill(null)}/>}
         {tab==="churras"    &&<Churrasometro meats={active} onSendToChurrasco={markPacotesParaChurrasco} setTab={setTab}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} entries={entries}/>}
