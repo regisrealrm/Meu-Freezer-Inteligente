@@ -3563,7 +3563,7 @@ export default function App() {
   const [changingUser,setChangingUser]= useState(false);
 
   const lastSaved      = useRef("");
-  const isRemoteUpdate = useRef(false);
+  const skipSaveUntil  = useRef(0);   // janela de tempo (ms) em que saves são ignorados após update remoto
   const lastRemoteTs   = useRef(0);   // timestamp da última versão remota conhecida
 
   // ── LOAD: localStorage primeiro (instantâneo) + Firebase real-time ─────────
@@ -3606,7 +3606,10 @@ export default function App() {
         // Proteção dupla: só aceita dado do Firebase se for mais recente E não vazio
         const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
         if(remoteTs > localTs && temDados) {
-          isRemoteUpdate.current = true;
+          // Janela de proteção: as 5 chamadas de setState abaixo (meats/exits/catalog/
+          // shoppingList/appConfig) podem disparar múltiplos renders separados; qualquer
+          // save que ocorra nesse intervalo deve ser ignorado, não só o primeiro.
+          skipSaveUntil.current = Date.now() + 800;
           lastRemoteTs.current = remoteTs;
           setMeats(data.meats              || []);
           setExits(data.exits              || []);
@@ -3630,10 +3633,10 @@ export default function App() {
   // ── SAVE: localStorage + Firebase SDK ────────────────────────────────────
   useEffect(()=>{
     if(!loaded) return;
-    if(isRemoteUpdate.current){ isRemoteUpdate.current=false; return; }
+    if(Date.now() < skipSaveUntil.current) return;
 
     // Nunca salva estado vazio no Firebase — protege contra sobrescrever dados válidos
-    const hasData = meats.length>0 || exits.length>0 || catalog.length>0;
+    const hasData = meats.length>0 || exits.length>0 || catalog.length>0 || shoppingList.length>0;
     if(!hasData) return;
 
     // Hash só com dados reais (sem _ts) — comparação estável
