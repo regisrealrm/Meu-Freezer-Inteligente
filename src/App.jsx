@@ -3128,7 +3128,7 @@ function Churrasometro({meats, onSendToChurrasco, setTab}) {
 }
 
 // ─── RELATÓRIOS ───────────────────────────────────────────────────────────────
-function Relatorios({meats,exits}) {
+function Relatorios({meats,exits,entries}) {
   const hoje = TODAY;
   const primeiroDiaMes = hoje.slice(0,7)+"-01";
 
@@ -3150,7 +3150,10 @@ function Relatorios({meats,exits}) {
   };
 
   const exitsRange    = exits.filter(e=>inRange(e.dataSaida));
-  const meatsRange    = meats.filter(m=>inRange(m.dataEntrada));
+  // Histórico de entradas: usa o LOG independente (entries), não mais meats.dataEntrada —
+  // isso garante que mesclagens (auto-merge de itens iguais) também apareçam no dia certo,
+  // já que antes ficavam "escondidas" dentro da data original do item.
+  const meatsRange    = (entries||[]).filter(e=>inRange(e.dataEntrada));
   const transfers     = [...exitsRange].filter(e=>e.motivo==="transferência").reverse();
   const saidas        = exitsRange.filter(e=>e.motivo!=="transferência");
   const locaisComSaida= [...new Set(saidas.map(e=>e.local).filter(Boolean))];
@@ -3262,25 +3265,25 @@ function Relatorios({meats,exits}) {
             <div style={{fontWeight:700,marginBottom:10}}>📥 Histórico de entradas ({meatsRange.length})</div>
             {meatsRange.length===0
               ? <div style={{color:C.muted,textAlign:"center"}}>Nenhuma entrada no período.</div>
-              : [...meatsRange].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(m=>(
-                <div key={m.id} style={{display:"flex",justifyContent:"space-between",
+              : [...meatsRange].sort((a,b)=>new Date(b.dataEntrada)-new Date(a.dataEntrada)).map(e=>(
+                <div key={e.id} style={{display:"flex",justifyContent:"space-between",
                   alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{m.corte||m.tipo}</div>
+                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{e.corte||e.tipo}</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4,alignItems:"center"}}>
                       <span style={{fontSize:11,color:C.muted,background:C.light,
-                        padding:"2px 7px",borderRadius:6,textTransform:"capitalize"}}>{m.tipo}</span>
-                      <span style={{fontSize:11,color:C.muted}}>📅 {fmtDate(m.dataEntrada)}</span>
-                      <span style={{fontSize:11,color:C.muted}}>📍 {m.local}</span>
-                      {m.precoPago&&<span style={{fontSize:11,color:C.success,background:C.success+"18",
-                        padding:"2px 7px",borderRadius:6}}>{fmtR(m.precoPago)}</span>}
-                      {m.feitorPor&&<span style={{fontSize:11,fontWeight:600,
-                        background:`hsl(${USERS.indexOf(m.feitorPor)*90},60%,20%)`,
-                        color:`hsl(${USERS.indexOf(m.feitorPor)*90},70%,65%)`,
-                        padding:"2px 7px",borderRadius:10}}>{m.feitorPor}</span>}
+                        padding:"2px 7px",borderRadius:6,textTransform:"capitalize"}}>{e.tipo}</span>
+                      <span style={{fontSize:11,color:C.muted}}>📅 {fmtDate(e.dataEntrada)}</span>
+                      <span style={{fontSize:11,color:C.muted}}>📍 {e.local}</span>
+                      {e.tipoRegistro==="mesclagem"&&<span style={{fontSize:11,color:C.info,background:C.info+"18",
+                        padding:"2px 7px",borderRadius:6}}>➕ adicionado ao estoque</span>}
+                      {e.feitorPor&&<span style={{fontSize:11,fontWeight:600,
+                        background:`hsl(${USERS.indexOf(e.feitorPor)*90},60%,20%)`,
+                        color:`hsl(${USERS.indexOf(e.feitorPor)*90},70%,65%)`,
+                        padding:"2px 7px",borderRadius:10}}>{e.feitorPor}</span>}
                     </div>
                   </div>
-                  <strong style={{fontSize:15,color:C.success,flexShrink:0}}>+{fmtKg(m.pesoInicial||m.pesoTotal)}</strong>
+                  <strong style={{fontSize:15,color:C.success,flexShrink:0}}>+{fmtKg(e.peso)}</strong>
                 </div>
               ))
             }
@@ -3551,6 +3554,7 @@ function Configuracoes({config,catalog,meats,onUpdateConfig,onUpdateCatalog,onUp
 export default function App() {
   const [meats,        setMeats]        = useState([]);
   const [exits,        setExits]        = useState([]);
+  const [entries,      setEntries]      = useState([]); // log independente de TODA entrada (novo item OU mesclagem)
   const [catalog,      setCatalog]      = useState([]);
   const [shoppingList, setShoppingList] = useState([]);
   const [appConfig,   setAppConfig]   = useState({
@@ -3586,6 +3590,16 @@ export default function App() {
         if(d.meats?.length||d.exits?.length||d.catalog?.length) {
           setMeats(d.meats              || []);
           setExits(d.exits              || []);
+          // Migração: quem já tinha itens cadastrados antes do log de entradas existir
+          // ganha um histórico retroativo baseado na dataEntrada de cada item (uma vez só).
+          const entriesLoaded = d.entries?.length
+            ? d.entries
+            : (d.meats||[]).map(m=>({
+                id: uid(), meatId: m.id, tipo: m.tipo, corte: m.corte, origem: m.origem,
+                local: m.local, peso: m.pesoInicial||m.pesoTotal, quantidadePecas: m.quantidadePecas||1,
+                dataEntrada: m.dataEntrada, feitorPor: m.feitorPor||"", tipoRegistro: "legado",
+              }));
+          setEntries(entriesLoaded);
           setCatalog(d.catalog          || []);
           setShoppingList(d.shoppingList|| []);
           if(d.appConfig) setAppConfig(d.appConfig);
@@ -3621,6 +3635,7 @@ export default function App() {
           lastRemoteTs.current = remoteTs;
           setMeats(data.meats              || []);
           setExits(data.exits              || []);
+          setEntries(data.entries          || []);
           setCatalog(data.catalog          || []);
           setShoppingList(data.shoppingList|| []);
           if(data.appConfig) setAppConfig(data.appConfig);
@@ -3648,12 +3663,12 @@ export default function App() {
     if(!hasData) return;
 
     // Hash só com dados reais (sem _ts) — comparação estável
-    const dataHash = JSON.stringify({meats, exits, catalog, appConfig, shoppingList});
+    const dataHash = JSON.stringify({meats, exits, entries, catalog, appConfig, shoppingList});
     if(dataHash === lastSaved.current) return;
 
     setSaveStatus("saving");
     const ts = Date.now();
-    const dataToSave = {meats, exits, catalog, appConfig, shoppingList, _ts: ts};
+    const dataToSave = {meats, exits, entries, catalog, appConfig, shoppingList, _ts: ts};
     const withTs = JSON.stringify(dataToSave);
     try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
 
@@ -3681,11 +3696,11 @@ export default function App() {
 
     const t = setTimeout(()=>attemptSave(0), 1000);
     return ()=>{ cancelled = true; clearTimeout(t); };
-  },[meats, exits, catalog, appConfig, shoppingList, loaded]);
+  },[meats, exits, entries, catalog, appConfig, shoppingList, loaded]);
 
   // ── EXPORT / IMPORT ───────────────────────────────────────────────────────
   const exportData = () => {
-    const json = JSON.stringify({meats,exits,catalog,shoppingList,appConfig}, null, 2);
+    const json = JSON.stringify({meats,exits,entries,catalog,shoppingList,appConfig}, null, 2);
     setImportTxt(json);
     setImportMsg("");
     setShowBackup(true);
@@ -3694,7 +3709,7 @@ export default function App() {
   const downloadBackup = () => {
     const now = new Date();
     const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}_${String(now.getHours()).padStart(2,"0")}h${String(now.getMinutes()).padStart(2,"0")}`;
-    const json = JSON.stringify({meats,exits,catalog,shoppingList,appConfig,_backup:stamp}, null, 2);
+    const json = JSON.stringify({meats,exits,entries,catalog,shoppingList,appConfig,_backup:stamp}, null, 2);
     const blob = new Blob([json], {type:"application/json"});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
@@ -3714,6 +3729,7 @@ export default function App() {
       if(!window.confirm(`Restaurar backup com ${d.meats.length} itens no estoque e ${(d.exits||[]).length} saídas?\n\nOs dados atuais serão substituídos.`)) return;
       setMeats(d.meats              || []);
       setExits(d.exits              || []);
+      setEntries(d.entries          || []);
       setCatalog(d.catalog          || []);
       setShoppingList(d.shoppingList|| []);
       if(d.appConfig) setAppConfig(d.appConfig);
@@ -3779,6 +3795,13 @@ export default function App() {
     };
 
     setMeats(p => [...p, newMeat]);
+    // Log independente: registra a entrada de hoje, mesmo que futuramente seja mesclada
+    setEntries(p => [...p, {
+      id: uid(), meatId: newMeat.id, tipo: newMeat.tipo, corte: newMeat.corte,
+      origem: newMeat.origem, local: newMeat.local, peso: pesoTotal,
+      quantidadePecas: pacotes.length, dataEntrada: newMeat.dataEntrada,
+      feitorPor: currentUser || "", tipoRegistro: "novo",
+    }]);
     // Cortes só são adicionados pelo menu Ajustes — não aqui
   };
 
@@ -3791,6 +3814,7 @@ export default function App() {
 
     const newPacotes = pesos.map(peso => ({id:uid(), peso, pesoAtual:peso, status:"disponível"}));
     const totalAdd   = Math.round(pesos.reduce((s,p)=>s+p, 0) * 1000) / 1000;
+    const alvo = meats.find(m=>m.id===id);
 
     setMeats(p=>p.map(m=>{
       if(m.id !== id) return m;
@@ -3807,6 +3831,15 @@ export default function App() {
         status:         m.status === "consumido" ? "disponível" : m.status,
       };
     }));
+    // Log independente: mesclagens TAMBÉM contam como entrada de hoje no histórico
+    if(alvo){
+      setEntries(p => [...p, {
+        id: uid(), meatId: id, tipo: alvo.tipo, corte: alvo.corte,
+        origem: alvo.origem, local: alvo.local, peso: totalAdd,
+        quantidadePecas: pesos.length, dataEntrada: TODAY,
+        feitorPor: currentUser || "", tipoRegistro: "mesclagem",
+      }]);
+    }
   };
   const transferMeat = (id, novoLocal) => setMeats(p=>p.map(m=>m.id===id?{...m,local:novoLocal,feitorPor:currentUser}:m));
   const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
@@ -4170,7 +4203,7 @@ export default function App() {
         {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig} prefill={entradaPrefill} onClearPrefill={()=>setEntradaPrefill(null)}/>}
         {tab==="churras"    &&<Churrasometro meats={active} onSendToChurrasco={markPacotesParaChurrasco} setTab={setTab}/>}
-        {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits}/>}
+        {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} entries={entries}/>}
         {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>withPassword(()=>{setExits([]);setMeats(p=>p.filter(m=>m.pesoTotal>0));})}/>}
       </div>
 
