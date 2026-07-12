@@ -3588,6 +3588,7 @@ export default function App() {
   const lastSaved      = useRef("");
   const skipSaveUntil  = useRef(0);   // janela de tempo (ms) em que saves são ignorados após update remoto
   const lastRemoteTs   = useRef(0);   // timestamp da última versão remota conhecida
+  const bootResolved   = useRef(false); // true assim que a 1ª leitura do Firebase chega após abrir o app
 
   // ── LOAD: localStorage primeiro (instantâneo) + Firebase real-time ─────────
   useEffect(()=>{
@@ -3623,6 +3624,13 @@ export default function App() {
     } catch(e){}
     setLoaded(true);
     setStorageOk(true);
+    // CRÍTICO: ao abrir o app (qualquer aparelho), nunca salvar nada nos primeiros segundos.
+    // Isso dá tempo do listener em tempo real do Firebase chegar e corrigir o estado local
+    // (que pode estar desatualizado ou vazio nesse aparelho) ANTES de qualquer gravação.
+    // Sem essa folga, um aparelho com cache antigo pode sobrescrever o trabalho de outra
+    // pessoa nos primeiros instantes após abrir o app — foi exatamente isso que causou
+    // perda de dados no uso real.
+    skipSaveUntil.current = Date.now() + 4000;
 
     // Aplica dados remotos ao estado local — usado tanto pelo listener em tempo real
     // quanto pela checagem manual quando o app volta a ficar visível (segundo plano → ativo)
@@ -3657,8 +3665,13 @@ export default function App() {
     try {
       const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
         const data = snapshot.val();
-        if(!data) return;
-        applyRemoteData(data);
+        if(data) applyRemoteData(data);
+        // Assim que a PRIMEIRA leitura do Firebase chega (rápido, geralmente <1s),
+        // já sabemos que o estado está reconciliado — não precisa esperar os 4s inteiros.
+        if(!bootResolved.current){
+          bootResolved.current = true;
+          skipSaveUntil.current = Math.min(skipSaveUntil.current, Date.now()+800);
+        }
       }, ()=>{});
 
       // Quando o app volta do segundo plano (aba minimizada, app trocado no celular),
