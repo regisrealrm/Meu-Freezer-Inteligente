@@ -1511,7 +1511,7 @@ function Dashboard({meats,exits,alerts,appConfig,pacotesChurrasco,totalChurrasco
 }
 
 // ─── ESTOQUE ──────────────────────────────────────────────────────────────────
-function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig,onTogglePacoteChurrasco,onAddToShoppingList}) {
+function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterExit,appConfig,onTogglePacoteChurrasco,onAddToShoppingList,shoppingList}) {
   const [flocais,    setFlocais]    = useState([]);
   const [futils,     setFutils]     = useState([]);
   const [forigens,   setForigens]   = useState([]);
@@ -2305,7 +2305,13 @@ function Estoque({meats,setTab,onTransfer,onUpdate,onMerge,onDelete,onRegisterEx
                                 setShowSaida(false); setSaidaForm({});
                                 if(novoTotal<=0){
                                   closeModal();
-                                  if(window.confirm(`Acabou o estoque de "${detail.corte||detail.tipo}".\n\nAdicionar à lista de compras?`)){
+                                  const nomeItem = (detail.corte||detail.tipo).trim().toLowerCase();
+                                  const jaNaLista = (shoppingList||[]).some(i=>
+                                    i.nome.trim().toLowerCase()===nomeItem && i.tipo===detail.tipo
+                                  );
+                                  if(jaNaLista){
+                                    alert(`Acabou o estoque de "${detail.corte||detail.tipo}".\n\n✅ Já está na lista de compras.`);
+                                  } else if(window.confirm(`Acabou o estoque de "${detail.corte||detail.tipo}".\n\nAdicionar à lista de compras?`)){
                                     onAddToShoppingList(detail.corte||detail.tipo, detail.tipo, detail.origem||"", detail.utilidade||"", detail.precoKg||null);
                                   }
                                 }
@@ -3880,7 +3886,7 @@ export default function App() {
   // ── LISTA DE COMPRAS ────────────────────────────────────────────────────────
   const addToShoppingList = (nome, tipo, origem="", utilidade="", precoKg=null) => {
     setShoppingList(prev=>{
-      if(prev.some(i=>i.nome.toLowerCase()===nome.toLowerCase()&&i.tipo===tipo)) return prev;
+      if(prev.some(i=>i.nome.trim().toLowerCase()===nome.trim().toLowerCase()&&i.tipo===tipo)) return prev;
       return [...prev, {id:uid(), nome, tipo, origem, utilidade, precoKg, addedBy:currentUser, addedAt:TODAY}];
     });
   };
@@ -3983,9 +3989,23 @@ export default function App() {
       grupoMeats.some(c=>c.id===m.id)&&m.pesoTotal<=0
     );
     if(esgotados.length>0){
-      const nomes=esgotados.map(m=>m.corte||m.tipo).join(", ");
-      if(window.confirm(`Acabou o estoque de: ${nomes}.\n\nAdicionar à lista de compras?`)){
-        esgotados.forEach(m=>addToShoppingList(m.corte||m.tipo,m.tipo,m.origem||"",m.utilidade||"",m.precoKg||null));
+      const emLista = (nome,tipo) => (shoppingList||[]).some(i=>
+        i.nome.trim().toLowerCase()===nome.trim().toLowerCase() && i.tipo===tipo
+      );
+      const jaNaLista = esgotados.filter(m=>emLista(m.corte||m.tipo, m.tipo));
+      const paraAdicionar = esgotados.filter(m=>!emLista(m.corte||m.tipo, m.tipo));
+
+      if(paraAdicionar.length>0){
+        const nomes = paraAdicionar.map(m=>m.corte||m.tipo).join(", ");
+        const avisoExtra = jaNaLista.length>0
+          ? `\n\n(${jaNaLista.map(m=>m.corte||m.tipo).join(", ")} já ${jaNaLista.length>1?"estão":"está"} na lista.)`
+          : "";
+        if(window.confirm(`Acabou o estoque de: ${nomes}.\n\nAdicionar à lista de compras?${avisoExtra}`)){
+          paraAdicionar.forEach(m=>addToShoppingList(m.corte||m.tipo,m.tipo,m.origem||"",m.utilidade||"",m.precoKg||null));
+        }
+      } else if(jaNaLista.length>0){
+        const nomes = jaNaLista.map(m=>m.corte||m.tipo).join(", ");
+        alert(`Acabou o estoque de: ${nomes}.\n\n✅ Já ${jaNaLista.length>1?"estão":"está"} na lista de compras.`);
       }
     }
   };
@@ -4235,7 +4255,7 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onCompreiItem={onCompreiItem} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),_ts:Date.now(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),_ts:Date.now(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList} shoppingList={shoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig} prefill={entradaPrefill} onClearPrefill={()=>setEntradaPrefill(null)}/>}
         {tab==="churras"    &&<Churrasometro meats={active} onSendToChurrasco={markPacotesParaChurrasco} setTab={setTab}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} entries={entries}/>}
