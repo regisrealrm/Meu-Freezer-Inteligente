@@ -4,7 +4,7 @@ import {
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref as dbRef, set, onValue, runTransaction } from "firebase/database";
+import { getDatabase, ref as dbRef, set, onValue } from "firebase/database";
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -113,7 +113,15 @@ const ALERT = {
 };
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-const TODAY     = new Date().toISOString().split("T")[0];
+// IMPORTANTE: usa data LOCAL (não UTC) — toISOString() usava UTC e causava bug:
+// no Brasil (UTC-3), cadastros feitos após 21h local já apareciam com a data do dia seguinte.
+const localDateStr = (date=new Date()) => {
+  const y  = date.getFullYear();
+  const m  = String(date.getMonth()+1).padStart(2,"0");
+  const d  = String(date.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+};
+const TODAY     = localDateStr();
 const diffDays  = (a,b) => Math.floor((new Date(b)-new Date(a))/86400000);
 const fmtDate   = (d) => { if(!d) return "—"; const [y,m,dd]=d.split("-"); return `${dd}/${m}/${y}`; };
 const fmtKg     = (kg) => (kg==null||isNaN(kg)?"—":`${Number(kg).toFixed(3).replace(".",",")} kg`);
@@ -3191,9 +3199,9 @@ function Relatorios({meats,exits}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
           {[
             {l:"Este mês",        di:hoje.slice(0,7)+"-01", df:hoje},
-            {l:"Mês passado",     di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-1);return d.toISOString().slice(0,7)+"-01";})(),
-                                  df:(()=>{const d=new Date(hoje);d.setDate(0);return d.toISOString().slice(0,10);})()},
-            {l:"Últimos 3 meses", di:(()=>{const d=new Date(hoje);d.setMonth(d.getMonth()-3);return d.toISOString().slice(0,10);})(), df:hoje},
+            {l:"Mês passado",     di:(()=>{const d=new Date(hoje+"T12:00");d.setMonth(d.getMonth()-1);d.setDate(1);return localDateStr(d);})(),
+                                  df:(()=>{const d=new Date(hoje+"T12:00");d.setDate(0);return localDateStr(d);})()},
+            {l:"Últimos 3 meses", di:(()=>{const d=new Date(hoje+"T12:00");d.setMonth(d.getMonth()-3);return localDateStr(d);})(), df:hoje},
             {l:"Este ano",        di:hoje.slice(0,4)+"-01-01", df:hoje},
           ].map(({l,di,df})=>(
             <button key={l} onClick={()=>{setDataInicio(di);setDataFim(df);setMostrar(false);}}
@@ -3642,33 +3650,37 @@ export default function App() {
     // Hash só com dados reais (sem _ts) — comparação estável
     const dataHash = JSON.stringify({meats, exits, catalog, appConfig, shoppingList});
     if(dataHash === lastSaved.current) return;
-    lastSaved.current = dataHash;
 
     setSaveStatus("saving");
     const ts = Date.now();
     const dataToSave = {meats, exits, catalog, appConfig, shoppingList, _ts: ts};
     const withTs = JSON.stringify(dataToSave);
-    try { localStorage.setItem("mfi_local_data", withTs); setSaveStatus("saved"); } catch(e){}
+    try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
 
-    const t = setTimeout(async ()=>{
+    let cancelled = false;
+    // Tenta gravar no Firebase com retentativas (backoff) — nunca desiste silenciosamente.
+    // Enquanto não confirmar sucesso, a mudança fica só no localStorage deste aparelho.
+    const attemptSave = async (tentativa=0) => {
+      if(cancelled) return;
       try {
-        // Transação: só grava se a versão remota NÃO for mais nova que a nossa base.
-        // Isso evita que um dispositivo com dados antigos sobrescreva mudanças recentes de outro.
-        await runTransaction(dbRef(db, DB_PATH), (remote)=>{
-          const remoteTs = remote?._ts || 0;
-          // Se o remoto é mais recente que o estado em que baseamos esta gravação,
-          // aborta (retorna undefined) — o listener onValue vai trazer a versão nova.
-          if(remoteTs > lastRemoteTs.current) {
-            return; // aborta a transação, mantém o dado remoto
-          }
-          return dataToSave;
-        });
+        await set(dbRef(db, DB_PATH), dataToSave);
+        if(cancelled) return;
         lastRemoteTs.current = ts;
+        lastSaved.current    = dataHash;   // só marca como salvo após confirmar no Firebase
+        setSaveStatus("saved");
       } catch(e){
-        console.warn("Firebase sync:", e.message);
+        console.warn("Firebase sync falhou, tentativa", tentativa+1, e.message);
+        if(cancelled) return;
+        setSaveStatus("offline");
+        if(tentativa < 5) {
+          const delay = Math.min(30000, 2000*Math.pow(2,tentativa)); // 2s,4s,8s,16s,30s
+          setTimeout(()=>attemptSave(tentativa+1), delay);
+        }
       }
-    }, 1000);
-    return ()=>clearTimeout(t);
+    };
+
+    const t = setTimeout(()=>attemptSave(0), 1000);
+    return ()=>{ cancelled = true; clearTimeout(t); };
   },[meats, exits, catalog, appConfig, shoppingList, loaded]);
 
   // ── EXPORT / IMPORT ───────────────────────────────────────────────────────
@@ -4056,6 +4068,9 @@ export default function App() {
     <div style={{background:C.bg,minHeight:"100vh",color:C.text,fontFamily:"'Inter', system-ui, sans-serif"}}>
       <style>{`
         *{box-sizing:border-box;}
+        html,body{margin:0;padding:0;background:#0A1520;height:100%;
+          overscroll-behavior-y:none;overflow-x:hidden;}
+        #root{min-height:100%;}
         input,select{color-scheme:dark;}
         input:focus,select:focus{border-color:#FF6B35!important;box-shadow:0 0 0 3px #FF6B3522;}
         ::-webkit-scrollbar{width:5px;}
@@ -4077,12 +4092,13 @@ export default function App() {
                 <div style={{fontSize:10,fontWeight:600,
                   color: storageOk===true&&saveStatus==="saved" ? C.success
                        : storageOk===false ? C.warning
-                       : saveStatus==="error" ? C.danger
+                       : saveStatus==="error"||saveStatus==="offline" ? C.danger
                        : C.muted}}>
-                  {saveStatus==="saving" && "💾 salvando..."}
-                  {saveStatus==="saved"  && `✅ salvo · ${meats.length} item${meats.length!==1?"s":""}`}
-                  {saveStatus==="error"  && "⚠️ erro ao salvar"}
-                  {saveStatus==="idle"   && "Meu Freezer Inteligente"}
+                  {saveStatus==="saving"  && "💾 salvando..."}
+                  {saveStatus==="saved"   && `✅ salvo · ${meats.length} item${meats.length!==1?"s":""}`}
+                  {saveStatus==="offline" && "⚠️ sem conexão · tentando novamente..."}
+                  {saveStatus==="error"   && "⚠️ erro ao salvar"}
+                  {saveStatus==="idle"    && "Meu Freezer Inteligente"}
                 </div>
               </div>
             </div>
