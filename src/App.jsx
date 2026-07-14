@@ -3,22 +3,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref as dbRef, set, onValue, get as dbGet } from "firebase/database";
+import { createClient } from "@supabase/supabase-js";
 
-// ─── FIREBASE ─────────────────────────────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyAUHVztoxNnSn3QDya-DgCw0qYTMlQSFmI",
-  authDomain: "meu-freezer-inteligente.firebaseapp.com",
-  databaseURL: "https://meu-freezer-inteligente-default-rtdb.firebaseio.com",
-  projectId: "meu-freezer-inteligente",
-  storageBucket: "meu-freezer-inteligente.firebasestorage.app",
-  messagingSenderId: "433524554201",
-  appId: "1:433524554201:web:314c88d44183e823f081c8"
-};
-const fbApp = initializeApp(firebaseConfig);
-const db    = getDatabase(fbApp);
-const DB_PATH = "mfi4/data";
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://jpjxsotrtmysiqmofyec.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_DYIFZgE2xVOPVD2ZOzcMvQ_lT-Pbfit";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  realtime: { params: { eventsPerSecond: 10 } },
+});
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const TIPOS  = ["bovina","suína","frango","peixe","ovinos","acompanhamento","frutos do mar","pato"];
@@ -127,12 +119,97 @@ const fmtDate   = (d) => { if(!d) return "—"; const [y,m,dd]=d.split("-"); ret
 const fmtKg     = (kg) => (kg==null||isNaN(kg)?"—":`${Number(kg).toFixed(3).replace(".",",")} kg`);
 const fmtR      = (v)  => (v?`R$ ${Number(v).toFixed(2).replace(".",",")}`:null);
 const uid       = ()   => Math.random().toString(36).slice(2,9);
+
+// ─── SUPABASE: conversão camelCase (JS) ↔ snake_case (banco) ──────────────────
+const meatToDb = (m) => ({
+  id: m.id, tipo: m.tipo, corte: m.corte||null, origem: m.origem||null,
+  utilidade: m.utilidade||null, data_entrada: m.dataEntrada, local: m.local||null,
+  status: m.status||"disponível", observacao: m.observacao||null,
+  preco_pago: m.precoPago??null, preco_kg: m.precoKg??null,
+  peso_inicial: m.pesoInicial??null, peso_total: m.pesoTotal||0,
+  quantidade_pecas: m.quantidadePecas||1, feitor_por: m.feitorPor||null,
+});
+const meatFromDb = (r, pacotes=[]) => ({
+  id: r.id, tipo: r.tipo, corte: r.corte, origem: r.origem, utilidade: r.utilidade,
+  dataEntrada: r.data_entrada, local: r.local, status: r.status, observacao: r.observacao,
+  precoPago: r.preco_pago, precoKg: r.preco_kg, pesoInicial: r.peso_inicial,
+  pesoTotal: r.peso_total, quantidadePecas: r.quantidade_pecas, feitorPor: r.feitor_por,
+  pacotes: pacotes.filter(p=>p.meat_id===r.id).map(pacoteFromDb),
+});
+const pacoteToDb = (p, meatId) => ({
+  id: p.id, meat_id: meatId, peso: p.peso, peso_atual: p.pesoAtual,
+  status: p.status||"disponível", churrasco: !!p.churrasco,
+});
+const pacoteFromDb = (r) => ({
+  id: r.id, peso: r.peso, pesoAtual: r.peso_atual, status: r.status, churrasco: r.churrasco,
+});
+const exitToDb = (e) => ({
+  id: e.id, meat_id: e.meatId||null, tipo: e.tipo||null, corte: e.corte||null,
+  carne_nome: e.carneNome||null, local: e.local||null, peso_retirado: e.pesoRetirado,
+  data_saida: e.dataSaida, motivo: e.motivo||null, feitor_por: e.feitorPor||null,
+  observacao: e.observacao||null,
+});
+const exitFromDb = (r) => ({
+  id: r.id, meatId: r.meat_id, tipo: r.tipo, corte: r.corte, carneNome: r.carne_nome,
+  local: r.local, pesoRetirado: r.peso_retirado, dataSaida: r.data_saida, motivo: r.motivo,
+  feitorPor: r.feitor_por, observacao: r.observacao, _ts: new Date(r.created_at).getTime(),
+});
+const entryToDb = (e) => ({
+  id: e.id, meat_id: e.meatId||null, tipo: e.tipo||null, corte: e.corte||null,
+  origem: e.origem||null, local: e.local||null, peso: e.peso,
+  quantidade_pecas: e.quantidadePecas||1, data_entrada: e.dataEntrada,
+  feitor_por: e.feitorPor||null, tipo_registro: e.tipoRegistro||"novo",
+});
+const entryFromDb = (r) => ({
+  id: r.id, meatId: r.meat_id, tipo: r.tipo, corte: r.corte, origem: r.origem,
+  local: r.local, peso: r.peso, quantidadePecas: r.quantidade_pecas,
+  dataEntrada: r.data_entrada, feitorPor: r.feitor_por, tipoRegistro: r.tipo_registro,
+  _ts: new Date(r.created_at).getTime(),
+});
+const catalogToDb = (c) => ({ id: c.id, nome: c.nome, tipo: c.tipo||null, key: c.key||null });
+const catalogFromDb = (r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, key: r.key });
+const shopToDb = (i) => ({
+  id: i.id, nome: i.nome, tipo: i.tipo||null, origem: i.origem||null,
+  utilidade: i.utilidade||null, preco_kg: i.precoKg??null,
+  added_by: i.addedBy||null, added_at: i.addedAt,
+});
+const shopFromDb = (r) => ({
+  id: r.id, nome: r.nome, tipo: r.tipo, origem: r.origem, utilidade: r.utilidade,
+  precoKg: r.preco_kg, addedBy: r.added_by, addedAt: r.added_at,
+});
+const appConfigFromDb = (r) => ({
+  tipos: r.tipos||[], locais: r.locais||[], origens: r.origens||[], utilidades: r.utilidades||[],
+});
+
+// Busca tudo do Supabase e monta no formato aninhado que o app já usa
+const fetchAllData = async () => {
+  const [meatsR, pacotesR, exitsR, entriesR, catalogR, shopR, cfgR] = await Promise.all([
+    supabase.from("meats").select("*"),
+    supabase.from("pacotes").select("*"),
+    supabase.from("exits").select("*").order("created_at",{ascending:false}),
+    supabase.from("entries").select("*").order("created_at",{ascending:false}),
+    supabase.from("catalog").select("*"),
+    supabase.from("shopping_list").select("*"),
+    supabase.from("app_config").select("*").eq("id",1).single(),
+  ]);
+  const pacotesData = pacotesR.data||[];
+  return {
+    meats:        (meatsR.data||[]).map(r=>meatFromDb(r,pacotesData)),
+    exits:        (exitsR.data||[]).map(exitFromDb),
+    entries:      (entriesR.data||[]).map(entryFromDb),
+    catalog:      (catalogR.data||[]).map(catalogFromDb),
+    shoppingList: (shopR.data||[]).map(shopFromDb),
+    appConfig:    cfgR.data ? appConfigFromDb(cfgR.data) : null,
+  };
+};
+
 const WaLogo    = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     style={{verticalAlign:"middle",marginRight:5,flexShrink:0}}>
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
   </svg>
 );
+
 
 // Carrega html2canvas e jsPDF via CDN sob demanda (uma única vez)
 let _h2cPromise = null;
@@ -3585,161 +3662,99 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [changingUser,setChangingUser]= useState(false);
 
-  const lastSaved      = useRef("");
-  const skipSaveUntil  = useRef(0);   // janela de tempo (ms) em que saves são ignorados após update remoto
-  const lastRemoteTs   = useRef(0);   // timestamp da última versão remota conhecida
-  const bootResolved   = useRef(false); // true assim que a 1ª leitura do Firebase chega após abrir o app
+  const channelRef     = useRef(null);
+  const fetchingRef    = useRef(false);
 
-  // ── LOAD: localStorage primeiro (instantâneo) + Firebase real-time ─────────
+  // Busca tudo de novo do Supabase e atualiza a tela — usado no boot, em qualquer
+  // mudança em tempo real, e quando o app volta do segundo plano.
+  const refreshAll = async () => {
+    if(fetchingRef.current) return; // evita buscas simultâneas empilhadas
+    fetchingRef.current = true;
+    try {
+      const data = await fetchAllData();
+      setMeats(data.meats);
+      setExits(data.exits);
+      setEntries(data.entries);
+      setCatalog(data.catalog);
+      setShoppingList(data.shoppingList);
+      if(data.appConfig) setAppConfig(data.appConfig);
+      try { localStorage.setItem("mfi_local_cache", JSON.stringify(data)); } catch(e){}
+      setSyncStatus("ok");
+      return true;
+    } catch(e){
+      console.warn("Supabase refresh falhou:", e.message);
+      setSyncStatus("stale");
+      return false;
+    } finally {
+      fetchingRef.current = false;
+    }
+  };
+
+  // ── LOAD: cache local primeiro (instantâneo) + Supabase real-time ──────────
   useEffect(()=>{
     try {
       const savedUser = localStorage.getItem("mfi3_user");
       if(savedUser && USERS.includes(savedUser)) setCurrentUser(savedUser);
 
-      const local = localStorage.getItem("mfi_local_data");
-      if(local) {
-        const d = JSON.parse(local);
-        if(d.meats?.length||d.exits?.length||d.catalog?.length) {
-          setMeats(d.meats              || []);
-          setExits(d.exits              || []);
-          // Migração: quem já tinha itens cadastrados antes do log de entradas existir
-          // ganha um histórico retroativo baseado na dataEntrada de cada item (uma vez só).
-          const entriesLoaded = d.entries?.length
-            ? d.entries
-            : (d.meats||[]).map(m=>({
-                id: uid(), meatId: m.id, tipo: m.tipo, corte: m.corte, origem: m.origem,
-                local: m.local, peso: m.pesoInicial||m.pesoTotal, quantidadePecas: m.quantidadePecas||1,
-                dataEntrada: m.dataEntrada, feitorPor: m.feitorPor||"", tipoRegistro: "legado",
-              }));
-          setEntries(entriesLoaded);
-          setCatalog(d.catalog          || []);
-          setShoppingList(d.shoppingList|| []);
-          if(d.appConfig) setAppConfig(d.appConfig);
-          // lastSaved guarda SEMPRE só os dados reais (sem _ts) para comparação estável
-          const {_ts:_, ...rest} = JSON.parse(local);
-          lastSaved.current = JSON.stringify(rest);
-          lastRemoteTs.current = d._ts || 0;
-        }
-      }
-    } catch(e){}
-    setLoaded(true);
-    setStorageOk(true);
-    // CRÍTICO: ao abrir o app (qualquer aparelho), nunca salvar nada nos primeiros segundos.
-    // Isso dá tempo do listener em tempo real do Firebase chegar e corrigir o estado local
-    // (que pode estar desatualizado ou vazio nesse aparelho) ANTES de qualquer gravação.
-    // Sem essa folga, um aparelho com cache antigo pode sobrescrever o trabalho de outra
-    // pessoa nos primeiros instantes após abrir o app — foi exatamente isso que causou
-    // perda de dados no uso real.
-    skipSaveUntil.current = Date.now() + 4000;
-
-    // Aplica dados remotos ao estado local — usado tanto pelo listener em tempo real
-    // quanto pela checagem manual quando o app volta a ficar visível (segundo plano → ativo)
-    const applyRemoteData = (data) => {
-      const remoteTs = data._ts || 0;
-      const localTs  = (() => {
-        try { return JSON.parse(localStorage.getItem("mfi_local_data")||"{}")._ts||0; }
-        catch { return 0; }
-      })();
-      const temDados = (data.meats?.length||0)+(data.exits?.length||0)+(data.catalog?.length||0)>0;
-      if(remoteTs > localTs && temDados) {
-        skipSaveUntil.current = Date.now() + 800;
-        lastRemoteTs.current = remoteTs;
-        setMeats(data.meats              || []);
-        setExits(data.exits              || []);
-        setEntries(data.entries          || []);
-        setCatalog(data.catalog          || []);
-        setShoppingList(data.shoppingList|| []);
-        if(data.appConfig) setAppConfig(data.appConfig);
-        const withTs = JSON.stringify(data);
-        try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
-        const {_ts:__, ...rest} = data;
-        lastSaved.current = JSON.stringify(rest);
-        return true;
-      } else if(remoteTs > lastRemoteTs.current) {
-        lastRemoteTs.current = remoteTs;
-      }
-      return false;
-    };
-
-    // Firebase: listener em tempo real
-    try {
-      const unsubscribe = onValue(dbRef(db, DB_PATH), (snapshot)=>{
-        const data = snapshot.val();
-        if(data) applyRemoteData(data);
-        // Assim que a PRIMEIRA leitura do Firebase chega (rápido, geralmente <1s),
-        // já sabemos que o estado está reconciliado — não precisa esperar os 4s inteiros.
-        if(!bootResolved.current){
-          bootResolved.current = true;
-          skipSaveUntil.current = Math.min(skipSaveUntil.current, Date.now()+800);
-        }
-      }, ()=>{});
-
-      // Quando o app volta do segundo plano (aba minimizada, app trocado no celular),
-      // o iOS costuma suspender a conexão em tempo real do Firebase — o listener pode
-      // ficar "travado" sem avisar. Ao voltar a ficar visível, buscamos os dados mais
-      // recentes manualmente, sem apagar nada que a pessoa esteja digitando na hora.
-      const onVisible = async () => {
-        if(document.visibilityState !== "visible") return;
-        setSyncStatus("checking");
+      // Mostra o cache local instantaneamente enquanto busca a versão atual —
+      // pura conveniência visual; o Supabase é sempre a fonte da verdade,
+      // diferente do Firebase antigo não há mais risco de "salvar por cima"
+      // porque cada gravação agora afeta só a linha específica que mudou.
+      const cached = localStorage.getItem("mfi_local_cache");
+      if(cached) {
         try {
-          const snap = await dbGet(dbRef(db, DB_PATH));
-          const data = snap.val();
-          if(data) applyRemoteData(data);
-          setSyncStatus("ok");
-        } catch(e){
-          setSyncStatus("stale"); // mostra aviso discreto pra pessoa atualizar manualmente
-        }
-      };
-      document.addEventListener("visibilitychange", onVisible);
-
-      return ()=>{ unsubscribe(); document.removeEventListener("visibilitychange", onVisible); };
-    } catch(e){}
-  },[]);
-
-  // ── SAVE: localStorage + Firebase SDK ────────────────────────────────────
-  useEffect(()=>{
-    if(!loaded) return;
-    if(Date.now() < skipSaveUntil.current) return;
-
-    // Nunca salva estado vazio no Firebase — protege contra sobrescrever dados válidos
-    const hasData = meats.length>0 || exits.length>0 || catalog.length>0 || shoppingList.length>0;
-    if(!hasData) return;
-
-    // Hash só com dados reais (sem _ts) — comparação estável
-    const dataHash = JSON.stringify({meats, exits, entries, catalog, appConfig, shoppingList});
-    if(dataHash === lastSaved.current) return;
-
-    setSaveStatus("saving");
-    const ts = Date.now();
-    const dataToSave = {meats, exits, entries, catalog, appConfig, shoppingList, _ts: ts};
-    const withTs = JSON.stringify(dataToSave);
-    try { localStorage.setItem("mfi_local_data", withTs); } catch(e){}
-
-    let cancelled = false;
-    // Tenta gravar no Firebase com retentativas (backoff) — nunca desiste silenciosamente.
-    // Enquanto não confirmar sucesso, a mudança fica só no localStorage deste aparelho.
-    const attemptSave = async (tentativa=0) => {
-      if(cancelled) return;
-      try {
-        await set(dbRef(db, DB_PATH), dataToSave);
-        if(cancelled) return;
-        lastRemoteTs.current = ts;
-        lastSaved.current    = dataHash;   // só marca como salvo após confirmar no Firebase
-        setSaveStatus("saved");
-      } catch(e){
-        console.warn("Firebase sync falhou, tentativa", tentativa+1, e.message);
-        if(cancelled) return;
-        setSaveStatus("offline");
-        if(tentativa < 5) {
-          const delay = Math.min(30000, 2000*Math.pow(2,tentativa)); // 2s,4s,8s,16s,30s
-          setTimeout(()=>attemptSave(tentativa+1), delay);
-        }
+          const d = JSON.parse(cached);
+          if(d.meats?.length) {
+            setMeats(d.meats||[]); setExits(d.exits||[]); setEntries(d.entries||[]);
+            setCatalog(d.catalog||[]); setShoppingList(d.shoppingList||[]);
+            if(d.appConfig) setAppConfig(d.appConfig);
+          }
+        } catch(e){}
       }
-    };
+    } catch(e){}
 
-    const t = setTimeout(()=>attemptSave(0), 1000);
-    return ()=>{ cancelled = true; clearTimeout(t); };
-  },[meats, exits, entries, catalog, appConfig, shoppingList, loaded]);
+    (async () => {
+      const ok = await refreshAll();
+      setLoaded(true);
+      setStorageOk(true);
+      if(!ok) {
+        // Sem conexão no boot: tenta de novo em alguns segundos
+        setTimeout(refreshAll, 4000);
+      }
+    })();
+
+    // Realtime: qualquer mudança em qualquer tabela relevante → busca tudo de novo.
+    // Como cada gravação no Postgres afeta só a linha específica (não o banco
+    // inteiro como no Firebase), não existe mais risco de um aparelho "atrasado"
+    // apagar o trabalho de outro — o pior caso aqui é a tela demorar um instante
+    // a mais pra atualizar, nunca perder dados.
+    const channel = supabase
+      .channel("mfi-realtime")
+      .on("postgres_changes", {event:"*", schema:"public", table:"meats"},         refreshAll)
+      .on("postgres_changes", {event:"*", schema:"public", table:"pacotes"},       refreshAll)
+      .on("postgres_changes", {event:"*", schema:"public", table:"exits"},         refreshAll)
+      .on("postgres_changes", {event:"*", schema:"public", table:"entries"},       refreshAll)
+      .on("postgres_changes", {event:"*", schema:"public", table:"catalog"},       refreshAll)
+      .on("postgres_changes", {event:"*", schema:"public", table:"shopping_list"}, refreshAll)
+      .on("postgres_changes", {event:"*", schema:"public", table:"app_config"},    refreshAll)
+      .subscribe();
+    channelRef.current = channel;
+
+    // Quando o app volta do segundo plano, o Supabase Realtime (assim como o
+    // Firebase antes) pode ficar com a conexão suspensa sem avisar. Buscamos
+    // os dados mais recentes manualmente ao voltar a ficar visível.
+    const onVisible = () => {
+      if(document.visibilityState !== "visible") return;
+      setSyncStatus("checking");
+      refreshAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  },[]);
 
   // ── EXPORT / IMPORT ───────────────────────────────────────────────────────
   const exportData = () => {
@@ -3770,14 +3785,58 @@ export default function App() {
       if(pwd === null) return; // cancelou
       if(pwd !== "1404") { setImportMsg("❌ Senha incorreta."); return; }
       if(!window.confirm(`Restaurar backup com ${d.meats.length} itens no estoque e ${(d.exits||[]).length} saídas?\n\nOs dados atuais serão substituídos.`)) return;
-      setMeats(d.meats              || []);
-      setExits(d.exits              || []);
-      setEntries(d.entries          || []);
-      setCatalog(d.catalog          || []);
-      setShoppingList(d.shoppingList|| []);
-      if(d.appConfig) setAppConfig(d.appConfig);
-      setImportMsg("✅ Dados restaurados com sucesso!");
-      setShowBackup(false);
+
+      setImportMsg("⏳ Restaurando no servidor, aguarde...");
+      (async () => {
+        try {
+          // Apaga tudo primeiro (pacotes somem sozinhos por causa do "on delete cascade")
+          await supabase.from("meats").delete().not("id","is",null);
+          await supabase.from("exits").delete().not("id","is",null);
+          await supabase.from("entries").delete().not("id","is",null);
+          await supabase.from("catalog").delete().not("id","is",null);
+          await supabase.from("shopping_list").delete().not("id","is",null);
+
+          const newMeats = d.meats||[];
+          if(newMeats.length){
+            const { error: e1 } = await supabase.from("meats").insert(newMeats.map(meatToDb));
+            if(e1) throw e1;
+            const allPacotes = newMeats.flatMap(m=>(m.pacotes||[]).map(p=>pacoteToDb(p,m.id)));
+            if(allPacotes.length){
+              const { error: e2 } = await supabase.from("pacotes").insert(allPacotes);
+              if(e2) throw e2;
+            }
+          }
+          if((d.exits||[]).length){
+            const { error } = await supabase.from("exits").insert(d.exits.map(exitToDb));
+            if(error) throw error;
+          }
+          if((d.entries||[]).length){
+            const { error } = await supabase.from("entries").insert(d.entries.map(entryToDb));
+            if(error) throw error;
+          }
+          if((d.catalog||[]).length){
+            const { error } = await supabase.from("catalog").insert(d.catalog.map(catalogToDb));
+            if(error) throw error;
+          }
+          if((d.shoppingList||[]).length){
+            const { error } = await supabase.from("shopping_list").insert(d.shoppingList.map(shopToDb));
+            if(error) throw error;
+          }
+          if(d.appConfig){
+            const { error } = await supabase.from("app_config").update({
+              tipos:d.appConfig.tipos, locais:d.appConfig.locais,
+              origens:d.appConfig.origens, utilidades:d.appConfig.utilidades,
+            }).eq("id",1);
+            if(error) throw error;
+          }
+          await refreshAll();
+          setImportMsg("✅ Dados restaurados com sucesso!");
+          setShowBackup(false);
+        } catch(err){
+          console.error("Erro ao restaurar:", err.message);
+          setImportMsg("❌ Erro ao restaurar no servidor: "+err.message);
+        }
+      })();
     } catch(e) {
       setImportMsg("❌ JSON inválido. Verifique o conteúdo e tente novamente.");
     }
@@ -3839,13 +3898,33 @@ export default function App() {
 
     setMeats(p => [...p, newMeat]);
     // Log independente: registra a entrada de hoje, mesmo que futuramente seja mesclada
-    setEntries(p => [...p, {
+    const newEntry = {
       id: uid(), _ts: Date.now(), meatId: newMeat.id, tipo: newMeat.tipo, corte: newMeat.corte,
       origem: newMeat.origem, local: newMeat.local, peso: pesoTotal,
       quantidadePecas: pacotes.length, dataEntrada: newMeat.dataEntrada,
       feitorPor: currentUser || "", tipoRegistro: "novo",
-    }]);
+    };
+    setEntries(p => [...p, newEntry]);
     // Cortes só são adicionados pelo menu Ajustes — não aqui
+
+    // Grava no Supabase: cada linha afeta só a tabela/linha dela — duas pessoas
+    // cadastrando itens diferentes ao mesmo tempo nunca mais se atropelam.
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        const { error: e1 } = await supabase.from("meats").insert(meatToDb(newMeat));
+        if(e1) throw e1;
+        const { error: e2 } = await supabase.from("pacotes").insert(pacotes.map(p=>pacoteToDb(p,newMeat.id)));
+        if(e2) throw e2;
+        const { error: e3 } = await supabase.from("entries").insert(entryToDb(newEntry));
+        if(e3) throw e3;
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao salvar entrada:", err.message);
+        setSaveStatus("error");
+        alert("⚠️ Não foi possível salvar essa entrada no servidor. Verifique sua conexão e tente novamente.");
+      }
+    })();
   };
 
   const addToExisting = (id, pesoAdd, qtdAdd, precoAdd, pacotesPesos) => {
@@ -3858,35 +3937,110 @@ export default function App() {
     const newPacotes = pesos.map(peso => ({id:uid(), peso, pesoAtual:peso, status:"disponível"}));
     const totalAdd   = Math.round(pesos.reduce((s,p)=>s+p, 0) * 1000) / 1000;
     const alvo = meats.find(m=>m.id===id);
+    if(!alvo) return;
 
+    let novoMeatFields = null;
     setMeats(p=>p.map(m=>{
       if(m.id !== id) return m;
       const existingPacotes = m.pacotes || [{id:m.id+"_0", peso:m.pesoTotal, pesoAtual:m.pesoTotal, status:m.status}];
       const allPacotes = [...existingPacotes, ...newPacotes];
       const novoTotal  = Math.round(allPacotes.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0) * 1000) / 1000;
-      return {
-        ...m,
-        pacotes:        allPacotes,
+      novoMeatFields = {
         pesoTotal:      novoTotal,
         pesoInicial:    Math.round(((m.pesoInicial||m.pesoTotal) + totalAdd) * 1000) / 1000,
         quantidadePecas:(m.quantidadePecas||1) + pesos.length,
         precoPago:      precoAdd ? Math.round(((m.precoPago||0) + parseFloat(precoAdd)) * 100) / 100 : m.precoPago,
         status:         m.status === "consumido" ? "disponível" : m.status,
       };
+      return { ...m, pacotes: allPacotes, ...novoMeatFields };
     }));
+
     // Log independente: mesclagens TAMBÉM contam como entrada de hoje no histórico
-    if(alvo){
-      setEntries(p => [...p, {
-        id: uid(), _ts: Date.now(), meatId: id, tipo: alvo.tipo, corte: alvo.corte,
-        origem: alvo.origem, local: alvo.local, peso: totalAdd,
-        quantidadePecas: pesos.length, dataEntrada: TODAY,
-        feitorPor: currentUser || "", tipoRegistro: "mesclagem",
-      }]);
-    }
+    const newEntry = {
+      id: uid(), _ts: Date.now(), meatId: id, tipo: alvo.tipo, corte: alvo.corte,
+      origem: alvo.origem, local: alvo.local, peso: totalAdd,
+      quantidadePecas: pesos.length, dataEntrada: TODAY,
+      feitorPor: currentUser || "", tipoRegistro: "mesclagem",
+    };
+    setEntries(p => [...p, newEntry]);
+
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        const { error: e1 } = await supabase.from("pacotes").insert(newPacotes.map(p=>pacoteToDb(p,id)));
+        if(e1) throw e1;
+        const { error: e2 } = await supabase.from("meats").update({
+          peso_total: novoMeatFields.pesoTotal, peso_inicial: novoMeatFields.pesoInicial,
+          quantidade_pecas: novoMeatFields.quantidadePecas, preco_pago: novoMeatFields.precoPago,
+          status: novoMeatFields.status,
+        }).eq("id", id);
+        if(e2) throw e2;
+        const { error: e3 } = await supabase.from("entries").insert(entryToDb(newEntry));
+        if(e3) throw e3;
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao adicionar ao existente:", err.message);
+        setSaveStatus("error");
+        alert("⚠️ Não foi possível salvar no servidor. Verifique sua conexão e tente novamente.");
+      }
+    })();
   };
-  const transferMeat = (id, novoLocal) => setMeats(p=>p.map(m=>m.id===id?{...m,local:novoLocal,feitorPor:currentUser}:m));
-  const updateMeat   = (id, fields)   => setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
-  const deleteMeat   = (id)           => setMeats(p=>p.filter(m=>m.id!==id));
+
+  const transferMeat = (id, novoLocal) => {
+    setMeats(p=>p.map(m=>m.id===id?{...m,local:novoLocal,feitorPor:currentUser}:m));
+    supabase.from("meats").update({local:novoLocal, feitor_por:currentUser}).eq("id",id)
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
+  };
+  const updateMeat = (id, fields) => {
+    const meatAntes = meats.find(m=>m.id===id);
+    setMeats(p=>p.map(m=>m.id===id?{...m,...fields}:m));
+    const dbFields = {};
+    if("tipo" in fields)             dbFields.tipo = fields.tipo;
+    if("corte" in fields)            dbFields.corte = fields.corte;
+    if("origem" in fields)           dbFields.origem = fields.origem;
+    if("utilidade" in fields)        dbFields.utilidade = fields.utilidade;
+    if("local" in fields)            dbFields.local = fields.local;
+    if("status" in fields)           dbFields.status = fields.status;
+    if("observacao" in fields)       dbFields.observacao = fields.observacao;
+    if("precoPago" in fields)        dbFields.preco_pago = fields.precoPago;
+    if("precoKg" in fields)          dbFields.preco_kg = fields.precoKg;
+    if("pesoTotal" in fields)        dbFields.peso_total = fields.pesoTotal;
+    if("quantidadePecas" in fields)  dbFields.quantidade_pecas = fields.quantidadePecas;
+    if("dataEntrada" in fields)      dbFields.data_entrada = fields.dataEntrada;
+
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        if(Object.keys(dbFields).length>0){
+          const { error } = await supabase.from("meats").update(dbFields).eq("id",id);
+          if(error) throw error;
+        }
+        // Se pacotes vieram junto (ex: correção manual de peso/status), grava só o que mudou
+        if("pacotes" in fields && meatAntes){
+          const pacotesAntes = meatAntes.pacotes||[];
+          const alterados = fields.pacotes.filter(pn=>{
+            const antigo = pacotesAntes.find(pa=>pa.id===pn.id);
+            return !antigo || antigo.pesoAtual!==pn.pesoAtual || antigo.status!==pn.status || antigo.churrasco!==pn.churrasco;
+          });
+          for(const p of alterados){
+            const { error } = await supabase.from("pacotes")
+              .update({peso_atual:p.pesoAtual, status:p.status, churrasco:!!p.churrasco}).eq("id",p.id);
+            if(error) throw error;
+          }
+        }
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao atualizar item:", err.message);
+        setSaveStatus("error");
+      }
+    })();
+  };
+  const deleteMeat = (id) => {
+    setMeats(p=>p.filter(m=>m.id!==id));
+    // "on delete cascade" na tabela pacotes já apaga os pacotes junto
+    supabase.from("meats").delete().eq("id",id)
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
+  };
 
   // Verifica senha antes de ação destrutiva
   const withPassword = (action) => {
@@ -3898,12 +4052,17 @@ export default function App() {
 
   // ── LISTA DE COMPRAS ────────────────────────────────────────────────────────
   const addToShoppingList = (nome, tipo, origem="", utilidade="", precoKg=null) => {
-    setShoppingList(prev=>{
-      if(prev.some(i=>i.nome.trim().toLowerCase()===nome.trim().toLowerCase()&&i.tipo===tipo)) return prev;
-      return [...prev, {id:uid(), nome, tipo, origem, utilidade, precoKg, addedBy:currentUser, addedAt:TODAY}];
-    });
+    if(shoppingList.some(i=>i.nome.trim().toLowerCase()===nome.trim().toLowerCase()&&i.tipo===tipo)) return;
+    const newItem = {id:uid(), nome, tipo, origem, utilidade, precoKg, addedBy:currentUser, addedAt:TODAY};
+    setShoppingList(prev=>[...prev, newItem]);
+    supabase.from("shopping_list").insert(shopToDb(newItem))
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
   };
-  const removeFromShoppingList = (id) => setShoppingList(p=>p.filter(i=>i.id!==id));
+  const removeFromShoppingList = (id) => {
+    setShoppingList(p=>p.filter(i=>i.id!==id));
+    supabase.from("shopping_list").delete().eq("id",id)
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
+  };
 
   // Comprei: remove da lista e abre Entrada pré-preenchida
   const onCompreiItem = (item) => {
@@ -3932,11 +4091,18 @@ export default function App() {
 
   // ── CHURRASCO ──────────────────────────────────────────────────────────────
   const togglePacoteChurrasco = (meatId, pacoteId) => {
+    let novoValor = null;
     setMeats(prev=>prev.map(m=>{
       if(m.id!==meatId) return m;
-      const pacs = (m.pacotes||[]).map(p=>p.id===pacoteId?{...p,churrasco:!p.churrasco}:p);
+      const pacs = (m.pacotes||[]).map(p=>{
+        if(p.id!==pacoteId) return p;
+        novoValor = !p.churrasco;
+        return {...p, churrasco:novoValor};
+      });
       return {...m, pacotes:pacs};
     }));
+    supabase.from("pacotes").update({churrasco:novoValor}).eq("id",pacoteId)
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
   };
 
   // Marca uma lista de pacotes {meatId,pacoteId} como churrasco=true (usado pelo Churrascômetro)
@@ -3948,14 +4114,26 @@ export default function App() {
       const ids = new Set(matches.map(x=>x.pacoteId));
       return {...m, pacotes:(m.pacotes||[]).map(p=>ids.has(p.id)?{...p,churrasco:true}:p)};
     }));
+    const pacoteIds = list.map(p=>p.pacoteId);
+    supabase.from("pacotes").update({churrasco:true}).in("id",pacoteIds)
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
   };
 
   // ── Cancela só os pacotes de um grupo (churrasco ou refeição) ──────────────
   const cancelGrupo = (utilidade) => {
+    const idsParaLimpar = [];
     setMeats(prev=>prev.map(m=>{
       if(utilidade==="consumo" ? m.utilidade!=="consumo" : m.utilidade==="consumo") return m;
-      return {...m, pacotes:(m.pacotes||[]).map(p=>({...p,churrasco:false}))};
+      const pacs=(m.pacotes||[]).map(p=>{
+        if(p.churrasco) idsParaLimpar.push(p.id);
+        return {...p,churrasco:false};
+      });
+      return {...m, pacotes:pacs};
     }));
+    if(idsParaLimpar.length){
+      supabase.from("pacotes").update({churrasco:false}).in("id",idsParaLimpar)
+        .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
+    }
   };
   const cancelChurrasco = () => cancelGrupo("churrasco");
   const cancelRefeicao  = () => cancelGrupo("consumo");
@@ -3967,6 +4145,8 @@ export default function App() {
       m.utilidade===utilidade &&
       (m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido")
     );
+    const pacoteUpdates = []; // {id, peso_atual, status, churrasco}
+    const meatUpdates   = []; // {id, peso_total, status}
     const newMeats = meats.map(m=>{
       if(m.utilidade!==utilidade) return m;
       if(!(m.pacotes||[]).some(p=>p.churrasco&&p.status!=="consumido")) return m;
@@ -3977,13 +4157,20 @@ export default function App() {
           ? Math.min(Math.max(parseFloat(ajuste)||0, 0), p.pesoAtual)
           : p.pesoAtual;
         const novoPeso = Math.round((p.pesoAtual-pesoRetirar)*1000)/1000;
-        if(novoPeso<=0) return {...p,pesoAtual:0,status:"consumido",churrasco:false};
-        return {...p,pesoAtual:novoPeso,churrasco:false,status:"aberto"};
+        const result = novoPeso<=0
+          ? {...p,pesoAtual:0,status:"consumido",churrasco:false}
+          : {...p,pesoAtual:novoPeso,churrasco:false,status:"aberto"};
+        pacoteUpdates.push({id:p.id, peso_atual:result.pesoAtual, status:result.status, churrasco:false});
+        return result;
       });
       const novoTotal=Math.round(updatedPacs.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0)*1000)/1000;
-      return {...m,pacotes:updatedPacs,pesoTotal:novoTotal,status:novoTotal<=0?"consumido":"aberto"};
+      const novoStatus = novoTotal<=0?"consumido":"aberto";
+      meatUpdates.push({id:m.id, peso_total:novoTotal, status:novoStatus});
+      return {...m,pacotes:updatedPacs,pesoTotal:novoTotal,status:novoStatus};
     });
     setMeats(newMeats);
+
+    const newExits = [];
     grupoMeats.forEach(m=>{
       const cPacs=(m.pacotes||[]).filter(p=>p.churrasco&&p.status!=="consumido");
       const totalRet=Math.round(cPacs.reduce((s,p)=>{
@@ -3992,12 +4179,40 @@ export default function App() {
         return s+ret;
       },0)*1000)/1000;
       if(totalRet<=0) return;
-      setExits(prev=>[...prev,{
-        id:uid(),tipo:m.tipo,corte:m.corte,local:m.local,
+      newExits.push({
+        id:uid(),_ts:Date.now(),meatId:m.id,tipo:m.tipo,corte:m.corte,local:m.local,
         carneNome:m.corte||m.tipo,pesoRetirado:totalRet,
         dataSaida:TODAY,motivo,feitorPor:currentUser
-      }]);
+      });
     });
+    if(newExits.length) setExits(prev=>[...prev, ...newExits]);
+
+    // Grava tudo no Supabase: cada pacote e cada carne afetados, mais as saídas
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        for(const pu of pacoteUpdates){
+          const { error } = await supabase.from("pacotes")
+            .update({peso_atual:pu.peso_atual, status:pu.status, churrasco:pu.churrasco}).eq("id",pu.id);
+          if(error) throw error;
+        }
+        for(const mu of meatUpdates){
+          const { error } = await supabase.from("meats")
+            .update({peso_total:mu.peso_total, status:mu.status}).eq("id",mu.id);
+          if(error) throw error;
+        }
+        if(newExits.length){
+          const { error } = await supabase.from("exits").insert(newExits.map(exitToDb));
+          if(error) throw error;
+        }
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao confirmar saída:", err.message);
+        setSaveStatus("error");
+        alert("⚠️ Não foi possível salvar essa saída no servidor. Verifique sua conexão e tente novamente.");
+      }
+    })();
+
     const esgotados=newMeats.filter(m=>
       grupoMeats.some(c=>c.id===m.id)&&m.pesoTotal<=0
     );
@@ -4039,10 +4254,71 @@ export default function App() {
   // Renomeia campo em TODOS os itens do estoque de uma vez (Ajustes)
   const renameMeatField = (field, oldVal, newVal) => {
     if(!field||!oldVal||oldVal===newVal) return;
-    setMeats(prev => {
-      const updated = prev.map(m => m[field]===oldVal ? {...m,[field]:newVal} : m);
-      return updated;
+    const idsAfetados = meats.filter(m=>m[field]===oldVal).map(m=>m.id);
+    setMeats(prev => prev.map(m => m[field]===oldVal ? {...m,[field]:newVal} : m));
+    if(idsAfetados.length){
+      const dbCol = field==="tipo"?"tipo":field==="corte"?"corte":field==="origem"?"origem":field==="local"?"local":null;
+      if(dbCol){
+        supabase.from("meats").update({[dbCol]:newVal}).in("id",idsAfetados)
+          .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
+      }
+    }
+  };
+
+  // Grava a configuração inteira (tipos/locais/origens/utilidades) no Supabase
+  const updateAppConfig = (newConfig) => {
+    setAppConfig(newConfig);
+    supabase.from("app_config").update({
+      tipos:newConfig.tipos, locais:newConfig.locais,
+      origens:newConfig.origens, utilidades:newConfig.utilidades,
+    }).eq("id",1).then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
+  };
+
+  // Recebe o catálogo inteiro já modificado (add/remove/rename) e sincroniza a diferença
+  const updateCatalogList = (newCatalog) => {
+    const oldIds = new Set(catalog.map(c=>c.id));
+    const newIds = new Set(newCatalog.map(c=>c.id));
+    const toDelete = catalog.filter(c=>!newIds.has(c.id)).map(c=>c.id);
+    const toInsert = newCatalog.filter(c=>!oldIds.has(c.id));
+    const toUpdate = newCatalog.filter(c=>{
+      const old = catalog.find(o=>o.id===c.id);
+      return old && (old.nome!==c.nome || old.tipo!==c.tipo || old.key!==c.key);
     });
+    setCatalog(newCatalog);
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        if(toDelete.length){ const {error}=await supabase.from("catalog").delete().in("id",toDelete); if(error) throw error; }
+        if(toInsert.length){ const {error}=await supabase.from("catalog").insert(toInsert.map(catalogToDb)); if(error) throw error; }
+        for(const c of toUpdate){
+          const {error} = await supabase.from("catalog").update(catalogToDb(c)).eq("id",c.id);
+          if(error) throw error;
+        }
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao atualizar catálogo:", err.message);
+        setSaveStatus("error");
+      }
+    })();
+  };
+
+  // Apaga todo o histórico de saídas + itens já totalmente consumidos
+  const clearHistory = () => {
+    setExits([]);
+    setMeats(p=>p.filter(m=>m.pesoTotal>0));
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        const { error: e1 } = await supabase.from("exits").delete().not("id","is",null);
+        if(e1) throw e1;
+        const { error: e2 } = await supabase.from("meats").delete().lte("peso_total",0);
+        if(e2) throw e2;
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao limpar histórico:", err.message);
+        setSaveStatus("error");
+      }
+    })();
   };
 
   // Mescla dois itens em um — absorve os pacotes do item2 no item1
@@ -4054,26 +4330,66 @@ export default function App() {
     const pacs2 = m2.pacotes||[makePacote(m2.pesoTotal)];
     const merged = [...pacs1, ...pacs2];
     const novoTotal = merged.filter(p=>p.status!=="consumido").reduce((s,p)=>s+p.pesoAtual,0);
+    const novoInicial = parseFloat(((m1.pesoInicial||m1.pesoTotal)+(m2.pesoInicial||m2.pesoTotal)).toFixed(3));
+    const novaQtd = (m1.quantidadePecas||1)+(m2.quantidadePecas||1);
+    const novoPreco = (m1.precoPago||0)+(m2.precoPago||0)||null;
     setMeats(p=>p
       .map(m=>m.id===id1?{
         ...m,
         pacotes: merged,
         pesoTotal: parseFloat(novoTotal.toFixed(3)),
-        pesoInicial: parseFloat(((m.pesoInicial||m.pesoTotal)+(m2.pesoInicial||m2.pesoTotal)).toFixed(3)),
-        quantidadePecas: (m1.quantidadePecas||1)+(m2.quantidadePecas||1),
-        precoPago: (m1.precoPago||0)+(m2.precoPago||0)||null,
+        pesoInicial: novoInicial,
+        quantidadePecas: novaQtd,
+        precoPago: novoPreco,
       }:m)
       .filter(m=>m.id!==id2) // remove o item2
     );
+    (async () => {
+      setSaveStatus("saving");
+      try {
+        // Move os pacotes do item2 para o item1
+        const { error: e1 } = await supabase.from("pacotes").update({meat_id:id1}).eq("meat_id",id2);
+        if(e1) throw e1;
+        // Atualiza os totais do item1
+        const { error: e2 } = await supabase.from("meats").update({
+          peso_total: parseFloat(novoTotal.toFixed(3)), peso_inicial: novoInicial,
+          quantidade_pecas: novaQtd, preco_pago: novoPreco,
+        }).eq("id", id1);
+        if(e2) throw e2;
+        // Remove o item2 (seus pacotes já foram movidos, não sobra nada pra cascade apagar)
+        const { error: e3 } = await supabase.from("meats").delete().eq("id", id2);
+        if(e3) throw e3;
+        setSaveStatus("saved");
+      } catch(err){
+        console.error("Erro ao mesclar itens:", err.message);
+        setSaveStatus("error");
+        alert("⚠️ Não foi possível mesclar no servidor. Verifique sua conexão e tente novamente.");
+      }
+    })();
   };
   const registerExit= (ex)  => {
     const m = meats.find(x=>x.id===ex.carneId);
     if(!m) return;
     if(ex.motivo==="transferência") {
       setMeats(p=>p.map(x=>x.id===ex.carneId?{...x,local:ex.localDestino}:x));
-      setExits(p=>[...p,{...ex,id:uid(),_ts:Date.now(),carneNome:m.corte||m.tipo,tipo:m.tipo,
+      const newExit = {...ex,id:uid(),_ts:Date.now(),carneNome:m.corte||m.tipo,tipo:m.tipo,
         pesoRetirado:m.pesoTotal, feitorPor:currentUser,
-        observacao:`${m.local} → ${ex.localDestino}${ex.observacao?` · ${ex.observacao}`:""}`}]);
+        observacao:`${m.local} → ${ex.localDestino}${ex.observacao?` · ${ex.observacao}`:""}`};
+      setExits(p=>[...p,newExit]);
+      (async () => {
+        setSaveStatus("saving");
+        try {
+          const { error: e1 } = await supabase.from("meats").update({local:ex.localDestino}).eq("id",ex.carneId);
+          if(e1) throw e1;
+          const { error: e2 } = await supabase.from("exits").insert(exitToDb(newExit));
+          if(e2) throw e2;
+          setSaveStatus("saved");
+        } catch(err){
+          console.error("Erro ao transferir:", err.message);
+          setSaveStatus("error");
+          alert("⚠️ Não foi possível salvar a transferência no servidor.");
+        }
+      })();
     } else {
       const pacotesAtuais = m.pacotes||[{id:m.id+"_0",peso:m.pesoTotal,pesoAtual:m.pesoTotal,status:m.status}];
       const pacotesNovos  = applyExitToPacotes(pacotesAtuais, parseFloat(ex.pesoRetirado), ex.pacoteId);
@@ -4087,13 +4403,51 @@ export default function App() {
         : m.precoPago && m.pesoTotal>0
           ? Math.round((novoTotal / m.pesoTotal) * m.precoPago * 100) / 100
           : null;
+      const precoPagoFinal = novoTotal===0?0:novoPreco;
       setMeats(p=>p.map(x=>x.id===ex.carneId?{
         ...x, pacotes:pacotesNovos, pesoTotal:novoTotal,
         quantidadePecas:qtdAtiva, status:novoStatus,
-        precoPago:novoTotal===0?0:novoPreco,
+        precoPago:precoPagoFinal,
       }:x));
-      setExits(p=>[...p,{...ex,id:uid(),_ts:Date.now(),carneNome:m.corte||m.tipo,tipo:m.tipo,feitorPor:currentUser}]);
+      const newExit = {...ex,id:uid(),_ts:Date.now(),carneNome:m.corte||m.tipo,tipo:m.tipo,feitorPor:currentUser};
+      setExits(p=>[...p,newExit]);
+
+      (async () => {
+        setSaveStatus("saving");
+        try {
+          // Pacote específico foi consumido ou teve o peso reduzido — só o(s) que mudou(aram)
+          const pacotesAlterados = pacotesNovos.filter(pn=>{
+            const original = pacotesAtuais.find(po=>po.id===pn.id);
+            return !original || original.pesoAtual!==pn.pesoAtual || original.status!==pn.status;
+          });
+          for(const p of pacotesAlterados){
+            const { error } = await supabase.from("pacotes")
+              .update({peso_atual:p.pesoAtual, status:p.status}).eq("id",p.id);
+            if(error) throw error;
+          }
+          const { error: e2 } = await supabase.from("meats").update({
+            peso_total:novoTotal, quantidade_pecas:qtdAtiva, status:novoStatus, preco_pago:precoPagoFinal,
+          }).eq("id", ex.carneId);
+          if(e2) throw e2;
+          const { error: e3 } = await supabase.from("exits").insert(exitToDb(newExit));
+          if(e3) throw e3;
+          setSaveStatus("saved");
+        } catch(err){
+          console.error("Erro ao registrar saída:", err.message);
+          setSaveStatus("error");
+          alert("⚠️ Não foi possível salvar essa saída no servidor. Verifique sua conexão e tente novamente.");
+        }
+      })();
     }
+  };
+
+  // Registra apenas o LOG de uma saída já aplicada (pacotes/status já foram
+  // atualizados separadamente via updateMeat) — usado pela tela de detalhe do Estoque.
+  const logExit = (exit) => {
+    const newExit = {...exit,id:uid(),_ts:Date.now(),feitorPor:currentUser};
+    setExits(p=>[...p,newExit]);
+    supabase.from("exits").insert(exitToDb(newExit))
+      .then(({error})=>{ if(error){ console.error(error.message); setSaveStatus("error"); } });
   };
 
   const TABS = [
@@ -4268,11 +4622,11 @@ export default function App() {
       {/* ── Content ────────────────────────────────────── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"16px 16px 60px"}}>
         {tab==="dashboard"  &&<Dashboard   meats={active} exits={exits} alerts={alerts} appConfig={appConfig} pacotesChurrasco={pacotesChurrasco} totalChurrascoKg={totalChurrascoKg} onConfirmChurrasco={confirmChurrasco} onCancelChurrasco={cancelChurrasco} pacotesRefeicao={pacotesRefeicao} totalRefeicaoKg={totalRefeicaoKg} onConfirmRefeicao={confirmRefeicao} onCancelRefeicao={cancelRefeicao} onTogglePacoteChurrasco={togglePacoteChurrasco} shoppingList={shoppingList} onRemoveFromShoppingList={removeFromShoppingList} onCompreiItem={onCompreiItem} onAddToShoppingList={addToShoppingList} meatsCatalog={meatsCatalog}/>}
-        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={exit=>{setExits(p=>[...p,{...exit,id:uid(),_ts:Date.now(),feitorPor:currentUser}]);}} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList} shoppingList={shoppingList}/>}
+        {tab==="estoque"    &&<Estoque     meats={active} setTab={setTab} onTransfer={transferMeat} onUpdate={updateMeat} onMerge={mergeItems} onDelete={id=>withPassword(()=>deleteMeat(id))} onRegisterExit={logExit} appConfig={appConfig} onTogglePacoteChurrasco={togglePacoteChurrasco} onAddToShoppingList={addToShoppingList} shoppingList={shoppingList}/>}
         {tab==="entrada"    &&<Entrada     onAdd={addMeat} onAddToExisting={addToExisting} catalog={catalog} meats={active} setTab={setTab} appConfig={appConfig} prefill={entradaPrefill} onClearPrefill={()=>setEntradaPrefill(null)}/>}
         {tab==="churras"    &&<Churrasometro meats={active} onSendToChurrasco={markPacotesParaChurrasco} setTab={setTab}/>}
         {tab==="relatorios" &&<Relatorios  meats={meats} exits={exits} entries={entries}/>}
-        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={setAppConfig} onUpdateCatalog={setCatalog} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>withPassword(()=>{setExits([]);setMeats(p=>p.filter(m=>m.pesoTotal>0));})}/>}
+        {tab==="config"     &&<Configuracoes config={appConfig} catalog={catalog} meats={meats} onUpdateConfig={updateAppConfig} onUpdateCatalog={updateCatalogList} onUpdateMeats={setMeats} onRenameMeatField={renameMeatField} onClearHistory={()=>withPassword(clearHistory)}/>}
       </div>
 
       {/* ── Backup / Restore modal ──────────────────────── */}
