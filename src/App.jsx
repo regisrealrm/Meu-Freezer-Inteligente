@@ -3789,6 +3789,26 @@ export default function App() {
       setImportMsg("⏳ Restaurando no servidor, aguarde...");
       (async () => {
         try {
+          // Backups antigos (do Firebase) usam IDs curtos tipo "pppiyt1", mas o Supabase
+          // exige UUID de verdade. Gera um UUID novo pra cada ID que não for válido,
+          // mantendo um mapa pra atualizar as referências (meatId em pacotes/entries/exits).
+          const isUuid = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||"");
+          const freshId = (oldId) => isUuid(oldId) ? oldId : crypto.randomUUID();
+          const meatIdMap = {};
+
+          const newMeats = (d.meats||[]).map(m=>{
+            const nid = freshId(m.id);
+            meatIdMap[m.id] = nid;
+            return {
+              ...m, id: nid,
+              pacotes: (m.pacotes||[]).map(p=>({...p, id: freshId(p.id)})),
+            };
+          });
+          const newExits   = (d.exits||[]).map(e=>({...e, id:freshId(e.id), meatId: e.meatId ? (meatIdMap[e.meatId]||null) : null}));
+          const newEntries = (d.entries||[]).map(e=>({...e, id:freshId(e.id), meatId: e.meatId ? (meatIdMap[e.meatId]||null) : null}));
+          const newCatalog = (d.catalog||[]).map(c=>({...c, id:freshId(c.id)}));
+          const newShopping= (d.shoppingList||[]).map(i=>({...i, id:freshId(i.id)}));
+
           // Apaga tudo primeiro (pacotes somem sozinhos por causa do "on delete cascade")
           await supabase.from("meats").delete().not("id","is",null);
           await supabase.from("exits").delete().not("id","is",null);
@@ -3796,7 +3816,6 @@ export default function App() {
           await supabase.from("catalog").delete().not("id","is",null);
           await supabase.from("shopping_list").delete().not("id","is",null);
 
-          const newMeats = d.meats||[];
           if(newMeats.length){
             const { error: e1 } = await supabase.from("meats").insert(newMeats.map(meatToDb));
             if(e1) throw e1;
@@ -3806,20 +3825,20 @@ export default function App() {
               if(e2) throw e2;
             }
           }
-          if((d.exits||[]).length){
-            const { error } = await supabase.from("exits").insert(d.exits.map(exitToDb));
+          if(newExits.length){
+            const { error } = await supabase.from("exits").insert(newExits.map(exitToDb));
             if(error) throw error;
           }
-          if((d.entries||[]).length){
-            const { error } = await supabase.from("entries").insert(d.entries.map(entryToDb));
+          if(newEntries.length){
+            const { error } = await supabase.from("entries").insert(newEntries.map(entryToDb));
             if(error) throw error;
           }
-          if((d.catalog||[]).length){
-            const { error } = await supabase.from("catalog").insert(d.catalog.map(catalogToDb));
+          if(newCatalog.length){
+            const { error } = await supabase.from("catalog").insert(newCatalog.map(catalogToDb));
             if(error) throw error;
           }
-          if((d.shoppingList||[]).length){
-            const { error } = await supabase.from("shopping_list").insert(d.shoppingList.map(shopToDb));
+          if(newShopping.length){
+            const { error } = await supabase.from("shopping_list").insert(newShopping.map(shopToDb));
             if(error) throw error;
           }
           if(d.appConfig){
