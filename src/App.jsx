@@ -118,7 +118,13 @@ const diffDays  = (a,b) => Math.floor((new Date(b)-new Date(a))/86400000);
 const fmtDate   = (d) => { if(!d) return "—"; const [y,m,dd]=d.split("-"); return `${dd}/${m}/${y}`; };
 const fmtKg     = (kg) => (kg==null||isNaN(kg)?"—":`${Number(kg).toFixed(3).replace(".",",")} kg`);
 const fmtR      = (v)  => (v?`R$ ${Number(v).toFixed(2).replace(".",",")}`:null);
-const uid       = ()   => Math.random().toString(36).slice(2,9);
+// Gera um UUID válido (compatível com as colunas "uuid" do Supabase).
+// Antes gerava strings curtas tipo "k5ylysk", que o Postgres rejeitava.
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : (
+  [1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  )
+);
 
 // ─── SUPABASE: conversão camelCase (JS) ↔ snake_case (banco) ──────────────────
 const meatToDb = (m) => ({
