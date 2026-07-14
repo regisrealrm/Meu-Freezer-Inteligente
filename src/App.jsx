@@ -6,8 +6,8 @@ import {
 import { createClient } from "@supabase/supabase-js";
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://jpjxsotrtmysiqmofyec.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_DYIFZgE2xVOPVD2ZOzcMvQ_lT-Pbfit";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://jpjxsotrtmysiqmofyec.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_DYIFZgE2xVOPVD2ZOzcMvQ_lT-Pbfit";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   realtime: { params: { eventsPerSecond: 10 } },
 });
@@ -3750,9 +3750,19 @@ export default function App() {
     };
     document.addEventListener("visibilitychange", onVisible);
 
+    // Reforço extra: mesmo com o tempo real funcionando na maioria das vezes,
+    // a conexão pode ficar "presa" silenciosamente sem disparar erro nem
+    // reconectar sozinha. Como reforço, busca os dados de novo a cada 20s
+    // enquanto a tela estiver visível — garante que ninguém fica preso
+    // olhando pra uma versão desatualizada por muito tempo.
+    const pollInterval = setInterval(()=>{
+      if(document.visibilityState === "visible") refreshAll();
+    }, 20000);
+
     return () => {
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(pollInterval);
     };
   },[]);
 
@@ -3941,7 +3951,7 @@ export default function App() {
       } catch(err){
         console.error("Erro ao salvar entrada:", err.message);
         setSaveStatus("error");
-        alert("⚠️ Não foi possível salvar essa entrada no servidor. Verifique sua conexão e tente novamente.");
+        alert("⚠️ Não foi possível salvar essa entrada no servidor:\n\n"+err.message+"\n\nO item ficou só neste celular por enquanto — tente de novo com internet estável.");
       }
     })();
   };
@@ -4000,7 +4010,7 @@ export default function App() {
       } catch(err){
         console.error("Erro ao adicionar ao existente:", err.message);
         setSaveStatus("error");
-        alert("⚠️ Não foi possível salvar no servidor. Verifique sua conexão e tente novamente.");
+        alert("⚠️ Não foi possível salvar no servidor:\n\n"+err.message+"\n\nA mudança ficou só neste celular por enquanto — tente de novo com internet estável.");
       }
     })();
   };
@@ -4228,7 +4238,7 @@ export default function App() {
       } catch(err){
         console.error("Erro ao confirmar saída:", err.message);
         setSaveStatus("error");
-        alert("⚠️ Não foi possível salvar essa saída no servidor. Verifique sua conexão e tente novamente.");
+        alert("⚠️ Não foi possível salvar essa saída no servidor:\n\n"+err.message+"\n\nA saída ficou só neste celular por enquanto — tente de novo com internet estável.");
       }
     })();
 
@@ -4382,7 +4392,7 @@ export default function App() {
       } catch(err){
         console.error("Erro ao mesclar itens:", err.message);
         setSaveStatus("error");
-        alert("⚠️ Não foi possível mesclar no servidor. Verifique sua conexão e tente novamente.");
+        alert("⚠️ Não foi possível mesclar no servidor:\n\n"+err.message+"\n\nA mesclagem ficou só neste celular por enquanto — tente de novo com internet estável.");
       }
     })();
   };
@@ -4406,7 +4416,7 @@ export default function App() {
         } catch(err){
           console.error("Erro ao transferir:", err.message);
           setSaveStatus("error");
-          alert("⚠️ Não foi possível salvar a transferência no servidor.");
+          alert("⚠️ Não foi possível salvar a transferência no servidor:\n\n"+err.message);
         }
       })();
     } else {
@@ -4454,7 +4464,7 @@ export default function App() {
         } catch(err){
           console.error("Erro ao registrar saída:", err.message);
           setSaveStatus("error");
-          alert("⚠️ Não foi possível salvar essa saída no servidor. Verifique sua conexão e tente novamente.");
+          alert("⚠️ Não foi possível salvar essa saída no servidor:\n\n"+err.message+"\n\nA saída ficou só neste celular por enquanto — tente de novo com internet estável.");
         }
       })();
     }
